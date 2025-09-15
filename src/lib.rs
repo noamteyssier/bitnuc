@@ -208,6 +208,7 @@
 //! working with packed sequences directly.
 
 mod error;
+pub mod fourbit;
 mod sequence;
 pub mod twobit;
 mod utils;
@@ -215,12 +216,9 @@ mod utils;
 pub use error::NucleotideError;
 pub use sequence::PackedSequence;
 
+pub use fourbit::{as_4bit, from_4bit, from_4bit_alloc};
 pub use twobit::{as_2bit, from_2bit, from_2bit_alloc};
-pub use utils::{
-    analysis::{BaseCount, GCContent},
-    //     as_2bit, decode, encode, encode_alloc, from_2bit, from_2bit_alloc, hdist, hdist_scalar,
-    //     split_packed,
-};
+pub use utils::analysis::{BaseCount, GCContent};
 
 #[cfg(test)]
 mod testing {
