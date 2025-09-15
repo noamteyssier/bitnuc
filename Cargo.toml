@@ -23,25 +23,5 @@ nucgen = "0.1.1"
 rand = "0.8.5"
 
 [[bench]]
-name = "sequence_benchmark"
-harness = false
-
-[[bench]]
-name = "packing_benchmark"
-harness = false
-
-[[bench]]
 name = "simd_comparison"
-harness = false
-
-[[bench]]
-name = "coding_benchmark"
-harness = false
-
-[[bench]]
-name = "functions_benchmark"
-harness = false
-
-[[bench]]
-name = "hdist_benchmark"
 harness = false
