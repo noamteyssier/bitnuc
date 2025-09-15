@@ -210,11 +210,11 @@
 
 mod error;
 pub mod fourbit;
-mod sequence;
 pub mod twobit;
+mod types;
 
 pub use error::NucleotideError;
-pub use sequence::BitNuc;
+pub use types::{BitNuc, NucSize};
 
 pub use fourbit::{as_4bit, from_4bit, from_4bit_alloc};
 pub use twobit::{as_2bit, from_2bit, from_2bit_alloc};
