@@ -3,6 +3,9 @@ mod naive;
 #[cfg(target_arch = "x86_64")]
 mod avx;
 
+#[cfg(target_arch = "aarch64")]
+mod aarch64;
+
 pub use crate::NucleotideError;
 
 pub fn as_4bit(seq: &[u8]) -> Result<u64, NucleotideError> {
