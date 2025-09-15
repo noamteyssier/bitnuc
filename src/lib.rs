@@ -105,18 +105,19 @@
 //! For more complex sequence manipulation, use the [`PackedSequence`] type:
 //!
 //! ```rust
-//! use bitnuc::{PackedSequence, GCContent, BaseCount};
+//! use bitnuc::BitNuc;
 //!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let seq = PackedSequence::new(b"ACGTACGT")?;
+//!     let seq: &[u8] = b"ACGTACGT";
+//!     let mut packed = BitNuc::new_2bit();
+//!     packed.fill(seq);
 //!
-//!     // Sequence analysis
-//!     println!("GC Content: {}%", seq.gc_content());
-//!     let [a_count, c_count, g_count, t_count] = seq.base_counts();
+//!     let mut dbuf = Vec::new(); // Buffer for decoded sequence
+//!     packed.decode_into(&mut dbuf);
 //!
-//!     // Slicing
-//!     let subseq = seq.slice(1..5)?;
-//!     assert_eq!(&subseq, b"CGTA");
+//!     // Check that the decoded sequence matches the original
+//!     assert_eq!(seq, &dbuf);
+//!
 //!     Ok(())
 //! }
 //! ```
@@ -211,56 +212,102 @@ mod error;
 pub mod fourbit;
 mod sequence;
 pub mod twobit;
-mod utils;
 
 pub use error::NucleotideError;
-pub use sequence::PackedSequence;
+pub use sequence::BitNuc;
 
 pub use fourbit::{as_4bit, from_4bit, from_4bit_alloc};
 pub use twobit::{as_2bit, from_2bit, from_2bit_alloc};
-pub use utils::analysis::{BaseCount, GCContent};
 
 #[cfg(test)]
 mod testing {
-    use crate::{BaseCount, GCContent, PackedSequence};
+    use crate::BitNuc;
 
     #[test]
-    fn test_sequence_creation_and_analysis() {
-        let seq = PackedSequence::new(b"ACGTACGT").unwrap();
+    fn test_sequence_creation_2bit() {
+        let seq = b"ACGTACGT";
+        let mut packed = BitNuc::new_2bit();
+
+        // Pack the sequence
+        packed.fill(seq).unwrap();
 
         // Test basic properties
         assert_eq!(seq.len(), 8);
-        assert!(!seq.is_empty());
 
-        // Test sequence content
-        assert_eq!(seq.to_vec().unwrap(), b"ACGTACGT");
-
-        // Test analysis
-        assert_eq!(seq.gc_content(), 50.0);
-        assert_eq!(seq.base_counts(), [2, 2, 2, 2]);
+        // Test decoding
+        let decoded = packed.decode_alloc().unwrap();
+        assert_eq!(&decoded, seq);
     }
 
     #[test]
-    fn test_sequence_mutations() {
-        let seq = PackedSequence::new(b"ACGTACGT").unwrap();
+    fn test_sequence_replacement_2bit() {
+        let seq_a = b"ACGT";
+        let seq_b = b"TGCA";
 
-        // Test slicing
-        let slice = seq.slice(2..6).unwrap();
-        assert_eq!(slice, b"GTAC");
+        let mut packed = BitNuc::new_2bit();
 
-        // Test individual base access
-        assert_eq!(seq.get(0).unwrap(), b'A');
-        assert_eq!(seq.get(7).unwrap(), b'T');
+        // Pack sequence A
+        packed.fill(seq_a).unwrap();
+
+        // Test basic properties
+        assert_eq!(seq_a.len(), 4);
+
+        // Test decoding
+        let decoded = packed.decode_alloc().unwrap();
+        assert_eq!(&decoded, seq_a);
+
+        // Replace with sequence B
+        packed.fill(seq_b).unwrap();
+
+        // Test basic properties
+        assert_eq!(seq_b.len(), 4);
+
+        // Test decoding
+        let decoded = packed.decode_alloc().unwrap();
+        assert_eq!(&decoded, seq_b);
     }
 
     #[test]
-    fn test_error_handling() {
-        // Test invalid sequence
-        assert!(PackedSequence::new(b"ACGN").is_err());
+    fn test_sequence_creation_4bit() {
+        let seq = b"ACGTACGT";
+        let mut packed = BitNuc::new_4bit();
 
-        // Test out of bounds
-        let seq = PackedSequence::new(b"ACGT").unwrap();
-        assert!(seq.get(4).is_err());
-        assert!(seq.slice(2..5).is_err());
+        // Pack the sequence
+        packed.fill(seq).unwrap();
+
+        // Test basic properties
+        assert_eq!(seq.len(), 8);
+
+        // Test decoding
+        let decoded = packed.decode_alloc().unwrap();
+        assert_eq!(&decoded, seq);
+    }
+
+    #[test]
+    fn test_sequence_replacement_4bit() {
+        let seq_a = b"ACGT";
+        let seq_b = b"TGCA";
+
+        let mut packed = BitNuc::new_4bit();
+
+        // Pack sequence A
+        packed.fill(seq_a).unwrap();
+
+        // Test basic properties
+        assert_eq!(seq_a.len(), 4);
+
+        // Test decoding
+        let decoded = packed.decode_alloc().unwrap();
+        assert_eq!(&decoded, seq_a);
+
+        // Replace with sequence B
+        packed.fill(seq_b).unwrap();
+
+        // Test basic properties
+        assert_eq!(seq_b.len(), 4);
+
+        // Test decoding
+        let decoded = packed.decode_alloc().unwrap();
+        assert_eq!(&decoded, seq_b);
     }
 }
