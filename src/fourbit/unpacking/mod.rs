@@ -3,9 +3,19 @@ mod naive;
 #[cfg(target_arch = "x86_64")]
 mod avx;
 
+#[cfg(target_arch = "aarch64")]
+mod neon;
+
 use crate::NucleotideError;
 
 pub fn from_4bit(ebuf: u64, len: usize, dbuf: &mut Vec<u8>) -> Result<(), NucleotideError> {
+    #[cfg(all(target_arch = "aarch64", not(feature = "nosimd")))]
+    if std::arch::is_aarch64_feature_detected!("neon") {
+        unsafe { neon::from_4bit_simd(ebuf, len, dbuf) }
+    } else {
+        naive::from_4bit(ebuf, len, dbuf)
+    }
+
     #[cfg(all(target_arch = "x86_64", not(feature = "nosimd")))]
     if is_x86_feature_detected!("avx2") {
         unsafe { avx::from_4bit_simd(ebuf, len, dbuf) }
@@ -31,6 +41,13 @@ pub fn from_4bit_alloc(packed: u64, len: usize) -> Result<Vec<u8>, NucleotideErr
 }
 
 pub fn decode(ebuf: &[u64], len: usize, dbuf: &mut Vec<u8>) -> Result<(), NucleotideError> {
+    #[cfg(all(target_arch = "aarch64", not(feature = "nosimd")))]
+    if std::arch::is_aarch64_feature_detected!("neon") {
+        unsafe { neon::decode_internal(ebuf, len, dbuf) }
+    } else {
+        naive::decode_internal(ebuf, len, dbuf)
+    }
+
     #[cfg(all(target_arch = "x86_64", not(feature = "nosimd")))]
     if is_x86_feature_detected!("avx2") {
         unsafe { avx::decode_internal(ebuf, len, dbuf) }

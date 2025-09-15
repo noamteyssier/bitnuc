@@ -4,11 +4,18 @@ mod naive;
 mod avx;
 
 #[cfg(target_arch = "aarch64")]
-mod aarch64;
+mod neon;
 
 pub use crate::NucleotideError;
 
 pub fn as_4bit(seq: &[u8]) -> Result<u64, NucleotideError> {
+    #[cfg(all(target_arch = "aarch64", not(feature = "nosimd")))]
+    if std::arch::is_aarch64_feature_detected!("neon") {
+        neon::as_4bit(seq)
+    } else {
+        naive::as_4bit(seq)
+    }
+
     #[cfg(all(target_arch = "x86_64", not(feature = "nosimd")))]
     if is_x86_feature_detected!("avx2") {
         // Use 256 bit instructions
@@ -30,6 +37,13 @@ pub fn as_4bit(seq: &[u8]) -> Result<u64, NucleotideError> {
 }
 
 pub fn encode(seq: &[u8], ebuf: &mut Vec<u64>) -> Result<(), NucleotideError> {
+    #[cfg(all(target_arch = "aarch64", not(feature = "nosimd")))]
+    if std::arch::is_aarch64_feature_detected!("neon") {
+        neon::encode_internal(seq, ebuf)
+    } else {
+        naive::encode_internal(seq, ebuf)
+    }
+
     #[cfg(all(target_arch = "x86_64", not(feature = "nosimd")))]
     if is_x86_feature_detected!("avx2") {
         // Use 256 bit instructions

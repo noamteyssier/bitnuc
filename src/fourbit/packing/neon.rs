@@ -1,5 +1,6 @@
 use std::arch::aarch64::*;
 
+use super::naive;
 use crate::NucleotideError;
 
 #[repr(u8)]
@@ -123,7 +124,7 @@ pub fn as_4bit(seq: &[u8]) -> Result<u64, NucleotideError> {
 
     // Use naive implementation for small sequences
     if seq.len() < 8 {
-        return naive_4bit::as_4bit(seq);
+        return naive::as_4bit(seq);
     }
 
     // Validate all bases
@@ -350,7 +351,7 @@ pub unsafe fn encode_nucleotides_simd_4bit(
 pub fn encode_internal(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), NucleotideError> {
     if sequence.len() < 16 {
         // Use the naive method for small sequences
-        let bits = super::as_4bit(sequence)?;
+        let bits = naive::as_4bit(sequence)?;
         ebuf.clear();
         ebuf.push(bits);
         return Ok(());

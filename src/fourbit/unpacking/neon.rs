@@ -3,14 +3,14 @@ use std::arch::aarch64::*;
 use crate::NucleotideError;
 
 #[inline(always)]
-unsafe fn unpack_4_bases(packed: u64, lookup: uint8x8_t) -> uint8x8_t {
+unsafe fn unpack_4_bases(packed: u64, lookup: uint8x16_t) -> uint8x8_t {
     let mut indices = [0u8; 8];
 
     for (i, v) in indices.iter_mut().take(4).enumerate() {
         *v = ((packed >> (i * 4)) & 0b1111) as u8;
     }
     let index_vec = vld1_u8(indices.as_ptr());
-    vtbl1_u8(lookup, index_vec)
+    vqtbl1_u8(lookup, index_vec) // Use vqtbl1_u8 for 16-element lookup
 }
 
 #[inline(always)]
@@ -106,10 +106,13 @@ pub unsafe fn from_4bit_simd(
         process_remainder_4bit(packed, remaining_start, expected_size, sequence);
     } else if expected_size >= 4 {
         // 4 bases at a time
-        let lookup = vld1_u8(
+        let lookup = vld1q_u8(
+            // Use 16-element lookup table
             [
                 b'A', b'C', b'G', b'T', // 0-3
                 b'N', b'N', b'N', b'N', // 4-7
+                b'N', b'N', b'N', b'N', // 8-11
+                b'N', b'N', b'N', b'N', // 12-15
             ]
             .as_ptr(),
         );
@@ -128,68 +131,6 @@ pub unsafe fn from_4bit_simd(
         process_remainder_4bit(packed, 0, expected_size, sequence);
     }
 
-    Ok(())
-}
-
-/// Decode 8 packed 4-bit codes (u32) to ASCII nucleotides
-#[inline(always)]
-pub unsafe fn decode_8_nucleotides_4bit(encoded: u32, dst: *mut u8) {
-    // Create lookup table for 4-bit codes
-    let lut: uint8x16_t = vld1q_u8(
-        [
-            b'A', b'C', b'G', b'T', // 0-3: Standard bases
-            b'N', b'N', b'N', b'N', // 4-7: Reserved/unused (map to N)
-            b'N', b'N', b'N', b'N', // 8-11: Reserved/unused (map to N)
-            b'N', b'N', b'N', b'N', // 12-15: N (ambiguous base)
-        ]
-        .as_ptr(),
-    );
-
-    // Extract 4-bit indices
-    let mut indices = [0u8; 8];
-    for i in 0..8 {
-        indices[i] = ((encoded >> (i * 4)) & 0xF) as u8;
-    }
-
-    let index_vec = vld1_u8(indices.as_ptr());
-    let ascii = vqtbl1_u8(lut, index_vec);
-
-    // Store result
-    vst1_u8(dst, ascii);
-}
-
-/// Decode a packed 4-bit stream (u64 words) back to ASCII nucleotides
-/// 16 nucleotides per u64
-pub unsafe fn decode_nucleotides_simd_4bit(
-    input: &[u64],
-    len: usize,
-    output: &mut [u8],
-) -> Result<(), NucleotideError> {
-    if len > output.len() {
-        return Err(NucleotideError::InvalidLength(len));
-    }
-
-    let chunk = 16; // 16 bases per u64 with 4-bit encoding
-    let chunks = len / chunk;
-
-    for i in 0..chunks {
-        let w = input.get(i).copied().unwrap_or(0);
-        // Lower 32 bits contain first 8 bases, upper 32 bits contain next 8 bases
-        decode_8_nucleotides_4bit(w as u32, output.as_mut_ptr().add(i * chunk));
-        decode_8_nucleotides_4bit((w >> 32) as u32, output.as_mut_ptr().add(i * chunk + 8));
-    }
-
-    // Scalar tail
-    let lut = [
-        b'A', b'C', b'G', b'T', // 0-3: Standard bases
-        b'N', b'N', b'N', b'N', // 4-7: Reserved/unused (map to N)
-        b'N', b'N', b'N', b'N', // 8-11: Reserved/unused (map to N)
-        b'N', b'N', b'N', b'N', // 12-15: N (ambiguous base)
-    ];
-    for j in (chunks * chunk)..len {
-        let idx = ((input[j / 16] >> (4 * (j % 16))) & 0xF) as usize;
-        output[j] = lut[idx];
-    }
     Ok(())
 }
 
@@ -232,11 +173,6 @@ pub unsafe fn decode_internal(
     }
 
     Ok(())
-}
-
-pub fn fast_decode_4bit(enc: &[u64], len: usize, out: &mut Vec<u8>) -> Result<(), NucleotideError> {
-    out.resize(len, 0);
-    unsafe { decode_nucleotides_simd_4bit(enc, len, out) }
 }
 
 #[cfg(test)]
