@@ -1,7 +1,7 @@
 mod packing;
 mod unpacking;
 
-pub use packing::{as_4bit, encode};
+pub use packing::{as_4bit, encode, encode_alloc};
 pub use unpacking::{decode, from_4bit, from_4bit_alloc};
 
 #[cfg(test)]

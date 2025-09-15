@@ -46,3 +46,9 @@ pub fn encode(seq: &[u8], ebuf: &mut Vec<u64>) -> Result<(), NucleotideError> {
     ))]
     naive::encode_internal(seq, ebuf)
 }
+
+pub fn encode_alloc(seq: &[u8]) -> Result<Vec<u64>, NucleotideError> {
+    let mut ebuf = Vec::new();
+    encode(seq, &mut ebuf)?;
+    Ok(ebuf)
+}
