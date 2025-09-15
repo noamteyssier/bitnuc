@@ -1,5 +1,5 @@
-use crate::encode;
 use crate::error::NucleotideError;
+use crate::twobit::encode;
 use std::ops::Range;
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]

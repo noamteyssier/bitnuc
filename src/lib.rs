@@ -71,7 +71,7 @@
 //! We'll use the [`nucgen`](https://crates.io/crates/nucgen) crate to generate random sequences for testing:
 //!
 //! ```rust
-//! use bitnuc::{encode, decode};
+//! use bitnuc::twobit::{encode, decode};
 //! use nucgen::Sequence;
 //!
 //! let mut rng = rand::thread_rng();
@@ -209,14 +209,17 @@
 
 mod error;
 mod sequence;
+pub mod twobit;
 mod utils;
 
 pub use error::NucleotideError;
 pub use sequence::PackedSequence;
+
+pub use twobit::{as_2bit, from_2bit, from_2bit_alloc};
 pub use utils::{
     analysis::{BaseCount, GCContent},
-    as_2bit, decode, encode, encode_alloc, from_2bit, from_2bit_alloc, hdist, hdist_scalar,
-    split_packed,
+    //     as_2bit, decode, encode, encode_alloc, from_2bit, from_2bit_alloc, hdist, hdist_scalar,
+    //     split_packed,
 };
 
 #[cfg(test)]

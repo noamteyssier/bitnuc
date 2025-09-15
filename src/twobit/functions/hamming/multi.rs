@@ -162,7 +162,7 @@ pub fn hdist(ebuf1: &[u64], ebuf2: &[u64], n_bases: usize) -> Result<u32, Nucleo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::encode_alloc;
+    use crate::twobit::encode_alloc;
 
     #[test]
     fn test_hdist_multi_validation() {

@@ -104,7 +104,7 @@ pub fn split_packed(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{decode, encode};
+    use crate::twobit::{decode, encode};
 
     #[test]
     fn test_split_basic() {
