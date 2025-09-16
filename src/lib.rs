@@ -5,6 +5,7 @@
 //! ## Features
 //!
 //! - 2-bit nucleotide encoding (A=00, C=01, G=10, T=11)
+//! - 4-bit nucleotide encoding (A=0000, C=0001, G=0010, T=0011, N=1111)
 //! - Direct bit manipulation functions for custom implementations
 //! - Higher-level sequence type with additional analysis features
 //!
@@ -156,7 +157,7 @@
 //! ## Performance Considerations
 //!
 //! When working with many short sequences (like k-mers), using `as_2bit` and `from_2bit`
-//! directly can be more efficient than creating [`PackedSequence`] instances:
+//! directly can be more efficient than creating [`BitNuc`] instances:
 //!
 //! ```rust
 //! use bitnuc::{as_2bit, from_2bit};
