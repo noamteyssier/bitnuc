@@ -1,4 +1,4 @@
-use crate::{fourbit, twobit, NucleotideError};
+use crate::{fourbit, twobit, Error};
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Default, Copy)]
 pub enum NucSize {
@@ -44,7 +44,7 @@ impl BitNuc {
         self.length == 0
     }
 
-    pub fn fill(&mut self, seq: &[u8]) -> Result<(), NucleotideError> {
+    pub fn fill(&mut self, seq: &[u8]) -> Result<(), Error> {
         self.clear();
         match self.size {
             NucSize::Two => twobit::encode(seq, &mut self.data),
@@ -54,14 +54,14 @@ impl BitNuc {
         Ok(())
     }
 
-    pub fn decode_into(&self, buf: &mut Vec<u8>) -> Result<(), NucleotideError> {
+    pub fn decode_into(&self, buf: &mut Vec<u8>) -> Result<(), Error> {
         match self.size {
             NucSize::Two => twobit::decode(&self.data, self.length, buf),
             NucSize::Four => fourbit::decode(&self.data, self.length, buf),
         }
     }
 
-    pub fn decode_alloc(&self) -> Result<Vec<u8>, NucleotideError> {
+    pub fn decode_alloc(&self) -> Result<Vec<u8>, Error> {
         let mut buf = Vec::with_capacity(self.length);
         self.decode_into(&mut buf)?;
         Ok(buf)

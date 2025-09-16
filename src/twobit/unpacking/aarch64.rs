@@ -1,4 +1,4 @@
-use crate::NucleotideError;
+use crate::Error;
 use std::arch::aarch64::*;
 
 #[inline(always)]
@@ -33,9 +33,9 @@ pub unsafe fn from_2bit_simd(
     packed: u64,
     expected_size: usize,
     sequence: &mut Vec<u8>,
-) -> Result<(), NucleotideError> {
+) -> Result<(), Error> {
     if expected_size > 32 {
-        return Err(NucleotideError::InvalidLength(expected_size));
+        return Err(Error::InvalidLength(expected_size));
     }
 
     sequence.reserve(expected_size);
@@ -101,9 +101,9 @@ pub unsafe fn decode_nucleotides_simd(
     input: &[u64],
     len: usize,
     output: &mut [u8],
-) -> Result<(), NucleotideError> {
+) -> Result<(), Error> {
     if len > output.len() {
-        return Err(NucleotideError::InvalidLength(len));
+        return Err(Error::InvalidLength(len));
     }
 
     let chunk = 32;
@@ -124,7 +124,7 @@ pub unsafe fn decode_nucleotides_simd(
     Ok(())
 }
 
-pub fn fast_decode(enc: &[u64], len: usize, out: &mut Vec<u8>) -> Result<(), NucleotideError> {
+pub fn fast_decode(enc: &[u64], len: usize, out: &mut Vec<u8>) -> Result<(), Error> {
     out.resize(len, 0);
     unsafe { decode_nucleotides_simd(enc, len, out) }
 }

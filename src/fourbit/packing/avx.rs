@@ -1,6 +1,6 @@
 use std::arch::x86_64::*;
 
-use crate::NucleotideError;
+use crate::Error;
 
 #[repr(u8)]
 enum NucleotideBits4 {
@@ -125,10 +125,10 @@ unsafe fn process_simd_chunk_4bit(chunk: __m256i, constants: &SimdConstants4) ->
     set_bits_4bit(c_mask, g_mask, t_mask, n_mask, constants)
 }
 
-pub fn as_4bit(seq: &[u8]) -> Result<u64, NucleotideError> {
+pub fn as_4bit(seq: &[u8]) -> Result<u64, Error> {
     if seq.len() > 16 {
         // 16 bases * 4 bits = 64 bits
-        return Err(NucleotideError::SequenceTooLong(seq.len()));
+        return Err(Error::SequenceTooLong(seq.len()));
     }
 
     // Use naive implementation for small sequences
@@ -138,7 +138,7 @@ pub fn as_4bit(seq: &[u8]) -> Result<u64, NucleotideError> {
 
     // Validate all bases
     if let Some(&invalid) = seq.iter().find(|&&b| !is_valid_nucleotide_4bit(b)) {
-        return Err(NucleotideError::InvalidBase(invalid));
+        return Err(Error::InvalidBase(invalid));
     }
 
     let mut packed = 0u64;
@@ -213,7 +213,7 @@ fn is_valid_nucleotide_4bit(base: u8) -> bool {
     )
 }
 
-pub fn encode_internal(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), NucleotideError> {
+pub fn encode_internal(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
     ebuf.clear();
 
     // Calculate number of chunks (16 bases per u64 with 4-bit encoding)
@@ -239,12 +239,12 @@ pub fn encode_internal(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Nucle
 // Naive implementation module for small sequences
 mod naive_4bit {
     use super::NucleotideBits4;
-    use crate::NucleotideError;
+    use crate::Error;
 
     #[inline(always)]
-    pub fn as_4bit(seq: &[u8]) -> Result<u64, NucleotideError> {
+    pub fn as_4bit(seq: &[u8]) -> Result<u64, Error> {
         if seq.len() > 16 {
-            return Err(NucleotideError::SequenceTooLong(seq.len()));
+            return Err(Error::SequenceTooLong(seq.len()));
         }
 
         let mut packed = 0u64;
@@ -259,7 +259,7 @@ mod naive_4bit {
                 | b'k' | b'M' | b'm' | b'B' | b'b' | b'D' | b'd' | b'H' | b'h' | b'V' | b'v' => {
                     NucleotideBits4::N as u64
                 }
-                invalid => return Err(NucleotideError::InvalidBase(invalid)),
+                invalid => return Err(Error::InvalidBase(invalid)),
             };
             packed |= bits << (i * 4);
         }
@@ -309,7 +309,7 @@ mod tests {
         let long_seq = vec![b'A'; 17];
         assert!(matches!(
             as_4bit(&long_seq),
-            Err(NucleotideError::SequenceTooLong(17))
+            Err(Error::SequenceTooLong(17))
         ));
     }
 

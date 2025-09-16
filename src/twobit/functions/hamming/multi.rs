@@ -3,7 +3,7 @@ use std::arch::aarch64::*;
 #[cfg(all(target_arch = "x86_64", not(feature = "nosimd")))]
 use std::arch::x86_64::*;
 
-use crate::NucleotideError;
+use crate::Error;
 
 use super::hdist_scalar;
 
@@ -119,11 +119,11 @@ unsafe fn hdist_multi_neon(ebuf1: &[u64], ebuf2: &[u64], full_chunks: usize) -> 
 /// Calculate hamming distance between two 2-bit encoded sequences
 /// Each u64 contains up to 32 bases (2 bits per base)
 #[inline]
-pub fn hdist(ebuf1: &[u64], ebuf2: &[u64], n_bases: usize) -> Result<u32, NucleotideError> {
+pub fn hdist(ebuf1: &[u64], ebuf2: &[u64], n_bases: usize) -> Result<u32, Error> {
     // Validate buffer sizes
     let expected_chunks = n_bases.div_ceil(32);
     if ebuf1.len() < expected_chunks || ebuf2.len() < expected_chunks {
-        return Err(NucleotideError::InvalidLength(n_bases));
+        return Err(Error::InvalidLength(n_bases));
     }
 
     let full_chunks = n_bases / 32;

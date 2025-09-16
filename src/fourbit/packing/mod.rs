@@ -6,9 +6,9 @@ mod avx;
 #[cfg(target_arch = "aarch64")]
 mod neon;
 
-pub use crate::NucleotideError;
+pub use crate::Error;
 
-pub fn as_4bit(seq: &[u8]) -> Result<u64, NucleotideError> {
+pub fn as_4bit(seq: &[u8]) -> Result<u64, Error> {
     #[cfg(all(target_arch = "aarch64", not(feature = "nosimd")))]
     if std::arch::is_aarch64_feature_detected!("neon") {
         neon::as_4bit(seq)
@@ -36,7 +36,7 @@ pub fn as_4bit(seq: &[u8]) -> Result<u64, NucleotideError> {
     naive::as_4bit(seq)
 }
 
-pub fn encode(seq: &[u8], ebuf: &mut Vec<u64>) -> Result<(), NucleotideError> {
+pub fn encode(seq: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
     #[cfg(all(target_arch = "aarch64", not(feature = "nosimd")))]
     if std::arch::is_aarch64_feature_detected!("neon") {
         neon::encode_internal(seq, ebuf)
@@ -64,7 +64,7 @@ pub fn encode(seq: &[u8], ebuf: &mut Vec<u64>) -> Result<(), NucleotideError> {
     naive::encode_internal(seq, ebuf)
 }
 
-pub fn encode_alloc(seq: &[u8]) -> Result<Vec<u64>, NucleotideError> {
+pub fn encode_alloc(seq: &[u8]) -> Result<Vec<u64>, Error> {
     let mut ebuf = Vec::new();
     encode(seq, &mut ebuf)?;
     Ok(ebuf)

@@ -1,4 +1,4 @@
-use crate::NucleotideError;
+use crate::Error;
 
 /// Splits a packed nucleotide sequence into two subsequences at the given index.
 ///
@@ -17,10 +17,10 @@ pub fn split_packed(
     idx: usize,
     lbuf: &mut Vec<u64>,
     rbuf: &mut Vec<u64>,
-) -> Result<(), NucleotideError> {
+) -> Result<(), Error> {
     // Validate inputs
     if idx > slen {
-        return Err(NucleotideError::IndexOutOfBounds {
+        return Err(Error::IndexOutOfBounds {
             index: idx,
             length: slen,
         });

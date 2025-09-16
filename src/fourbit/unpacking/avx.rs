@@ -1,6 +1,6 @@
 use std::arch::x86_64::*;
 
-use crate::NucleotideError;
+use crate::Error;
 
 #[inline(always)]
 unsafe fn unpack_4_bases(packed: u64, lookup: __m128i) -> __m128i {
@@ -60,9 +60,9 @@ pub unsafe fn from_4bit_simd(
     packed: u64,
     expected_size: usize,
     sequence: &mut Vec<u8>,
-) -> Result<(), NucleotideError> {
+) -> Result<(), Error> {
     if expected_size > 16 {
-        return Err(NucleotideError::InvalidLength(expected_size));
+        return Err(Error::InvalidLength(expected_size));
     }
 
     sequence.reserve(expected_size);
@@ -128,7 +128,7 @@ pub unsafe fn decode_internal(
     ebuf: &[u64],
     n_bases: usize,
     sequence: &mut Vec<u8>,
-) -> Result<(), NucleotideError> {
+) -> Result<(), Error> {
     sequence.reserve(n_bases);
 
     // Set up SIMD lookup table once for all chunks

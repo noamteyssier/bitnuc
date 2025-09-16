@@ -1,12 +1,8 @@
-use crate::NucleotideError;
+use crate::Error;
 
-pub fn from_4bit(
-    packed: u64,
-    expected_size: usize,
-    sequence: &mut Vec<u8>,
-) -> Result<(), NucleotideError> {
+pub fn from_4bit(packed: u64, expected_size: usize, sequence: &mut Vec<u8>) -> Result<(), Error> {
     if expected_size > 32 {
-        return Err(NucleotideError::InvalidLength(expected_size));
+        return Err(Error::InvalidLength(expected_size));
     }
 
     for i in 0..expected_size {
@@ -24,11 +20,7 @@ pub fn from_4bit(
     Ok(())
 }
 
-pub fn decode_internal(
-    ebuf: &[u64],
-    len: usize,
-    dbuf: &mut Vec<u8>,
-) -> Result<(), NucleotideError> {
+pub fn decode_internal(ebuf: &[u64], len: usize, dbuf: &mut Vec<u8>) -> Result<(), Error> {
     let n_chunks = len.div_ceil(16);
     let rem = match len % 16 {
         0 => 16, // full chunk
@@ -37,7 +29,7 @@ pub fn decode_internal(
 
     // Ensure the packed data is the correct length
     if n_chunks != ebuf.len() {
-        return Err(NucleotideError::InvalidLength(len));
+        return Err(Error::InvalidLength(len));
     }
 
     // Process all chunks except the last one
@@ -47,7 +39,7 @@ pub fn decode_internal(
 
     // Process last chunk with remainder
     ebuf.get(n_chunks - 1)
-        .map_or(Err(NucleotideError::InvalidLength(len)), |&component| {
+        .map_or(Err(Error::InvalidLength(len)), |&component| {
             from_4bit(component, rem, dbuf)
         })?;
 

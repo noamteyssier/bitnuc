@@ -6,7 +6,7 @@ pub use functions::{hdist, hdist_scalar, split_packed};
 pub use packing::{as_2bit, encode_internal};
 pub use unpacking::{from_2bit, from_2bit_alloc, from_2bit_multi};
 
-use crate::NucleotideError;
+use crate::Error;
 
 /// Encode a sequence into a buffer of 2-bit encoded nucleotides.
 ///
@@ -18,7 +18,7 @@ use crate::NucleotideError;
 /// # Errors
 ///
 /// If the sequence cannot be encoded, an error is returned.
-pub fn encode(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), NucleotideError> {
+pub fn encode(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
     encode_internal(sequence, ebuf)?;
     Ok(())
 }
@@ -34,7 +34,7 @@ pub fn encode(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), NucleotideErro
 /// # Errors
 ///
 /// If the sequence cannot be encoded, an error is returned.
-pub fn encode_alloc(sequence: &[u8]) -> Result<Vec<u64>, NucleotideError> {
+pub fn encode_alloc(sequence: &[u8]) -> Result<Vec<u64>, Error> {
     let mut ebuf = Vec::new();
     encode(sequence, &mut ebuf)?;
     Ok(ebuf)
@@ -56,14 +56,14 @@ pub fn encode_alloc(sequence: &[u8]) -> Result<Vec<u64>, NucleotideError> {
 /// # Errors
 ///
 /// If the sequence cannot be unpacked, an error is returned.
-pub fn decode(ebuf: &[u64], n_bases: usize, dbuf: &mut Vec<u8>) -> Result<(), NucleotideError> {
+pub fn decode(ebuf: &[u64], n_bases: usize, dbuf: &mut Vec<u8>) -> Result<(), Error> {
     from_2bit_multi(ebuf, n_bases, dbuf)
 }
 
 #[cfg(test)]
 mod testing {
     use super::*;
-    use crate::NucleotideError;
+    use crate::Error;
     use nucgen::Sequence;
 
     #[test]
@@ -110,7 +110,7 @@ mod testing {
     }
 
     #[test]
-    fn test_large_sequence_round_trip() -> Result<(), NucleotideError> {
+    fn test_large_sequence_round_trip() -> Result<(), Error> {
         let mut rng = rand::thread_rng();
         let mut seq = Sequence::new();
 

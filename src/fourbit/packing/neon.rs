@@ -1,7 +1,7 @@
 use std::arch::aarch64::*;
 
 use super::naive;
-use crate::NucleotideError;
+use crate::Error;
 
 #[repr(u8)]
 enum NucleotideBits4 {
@@ -116,10 +116,10 @@ unsafe fn process_simd_chunk_4bit(chunk: uint8x8_t, constants: &SimdConstants4) 
     set_bits_4bit(c_mask, g_mask, t_mask, n_mask, constants)
 }
 
-pub fn as_4bit(seq: &[u8]) -> Result<u64, NucleotideError> {
+pub fn as_4bit(seq: &[u8]) -> Result<u64, Error> {
     if seq.len() > 16 {
         // 16 bases * 4 bits = 64 bits
-        return Err(NucleotideError::SequenceTooLong(seq.len()));
+        return Err(Error::SequenceTooLong(seq.len()));
     }
 
     // Use naive implementation for small sequences
@@ -129,7 +129,7 @@ pub fn as_4bit(seq: &[u8]) -> Result<u64, NucleotideError> {
 
     // Validate all bases
     if let Some(&invalid) = seq.iter().find(|&&b| !is_valid_nucleotide_4bit(b)) {
-        return Err(NucleotideError::InvalidBase(invalid));
+        return Err(Error::InvalidBase(invalid));
     }
 
     let mut packed = 0u64;
@@ -291,10 +291,7 @@ unsafe fn valid_block_4bit(v: uint8x16_t) -> bool {
 /// Encode an arbitrary-length ASCII slice into packed 4-bit words (u64)
 /// 16 nt per word
 #[inline(always)]
-pub unsafe fn encode_nucleotides_simd_4bit(
-    input: &[u8],
-    output: &mut [u64],
-) -> Result<(), NucleotideError> {
+pub unsafe fn encode_nucleotides_simd_4bit(input: &[u8], output: &mut [u64]) -> Result<(), Error> {
     // If less than 16 nt, use the default method before SIMD overhead
     if input.len() < 16 {
         let tail = as_4bit(input)?;
@@ -312,7 +309,7 @@ pub unsafe fn encode_nucleotides_simd_4bit(
     while left >= 16 {
         let v = vld1q_u8(ip);
         if !valid_block_4bit(v) {
-            return Err(NucleotideError::InvalidBase(*ip));
+            return Err(Error::InvalidBase(*ip));
         }
 
         // Split into two 8-element chunks
@@ -340,7 +337,7 @@ pub unsafe fn encode_nucleotides_simd_4bit(
                 b't' => 3u64,
                 // All ambiguous bases become N (0b1111 = 15)
                 b'n' | b'r' | b'y' | b's' | b'w' | b'k' | b'm' | b'b' | b'd' | b'h' | b'v' => 15u64,
-                _ => return Err(NucleotideError::InvalidBase(*ip.add(i))),
+                _ => return Err(Error::InvalidBase(*ip.add(i))),
             } << (4 * i);
         }
         *out = tail;
@@ -348,7 +345,7 @@ pub unsafe fn encode_nucleotides_simd_4bit(
     Ok(())
 }
 
-pub fn encode_internal(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), NucleotideError> {
+pub fn encode_internal(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
     if sequence.len() < 16 {
         // Use the naive method for small sequences
         let bits = naive::as_4bit(sequence)?;
@@ -409,7 +406,7 @@ mod tests {
         let long_seq = vec![b'A'; 17];
         assert!(matches!(
             as_4bit(&long_seq),
-            Err(NucleotideError::SequenceTooLong(17))
+            Err(Error::SequenceTooLong(17))
         ));
     }
 

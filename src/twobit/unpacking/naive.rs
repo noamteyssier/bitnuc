@@ -1,12 +1,8 @@
-use crate::NucleotideError;
+use crate::Error;
 
-pub fn from_2bit(
-    packed: u64,
-    expected_size: usize,
-    sequence: &mut Vec<u8>,
-) -> Result<(), NucleotideError> {
+pub fn from_2bit(packed: u64, expected_size: usize, sequence: &mut Vec<u8>) -> Result<(), Error> {
     if expected_size > 32 {
-        return Err(NucleotideError::InvalidLength(expected_size));
+        return Err(Error::InvalidLength(expected_size));
     }
 
     for i in 0..expected_size {

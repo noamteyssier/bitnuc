@@ -139,19 +139,19 @@
 //!
 //! ## Error Handling
 //!
-//! All operations that could fail return a [`Result`] with [`NucleotideError`]:
+//! All operations that could fail return a [`Result`] with [`Error`]:
 //!
 //! ```rust
-//! use bitnuc::{as_2bit, NucleotideError};
+//! use bitnuc::{as_2bit, Error};
 //!
 //! // Invalid nucleotide
 //! let err = as_2bit(b"ACGN").unwrap_err();
-//! assert!(matches!(err, NucleotideError::InvalidBase(b'N')));
+//! assert!(matches!(err, Error::InvalidBase(b'N')));
 //!
 //! // Sequence too long
 //! let long_seq = vec![b'A'; 33];
 //! let err = as_2bit(&long_seq).unwrap_err();
-//! assert!(matches!(err, NucleotideError::SequenceTooLong(33)));
+//! assert!(matches!(err, Error::SequenceTooLong(33)));
 //! ```
 //!
 //! ## Performance Considerations
@@ -214,7 +214,7 @@ pub mod fourbit;
 pub mod twobit;
 mod types;
 
-pub use error::NucleotideError;
+pub use error::Error;
 pub use types::{BitNuc, NucSize};
 
 pub use fourbit::{as_4bit, from_4bit, from_4bit_alloc};

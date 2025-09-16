@@ -1,10 +1,10 @@
-use crate::NucleotideError;
+use crate::Error;
 
 #[inline(always)]
-pub fn as_4bit(seq: &[u8]) -> Result<u64, NucleotideError> {
+pub fn as_4bit(seq: &[u8]) -> Result<u64, Error> {
     if seq.len() > 16 {
         // 16 bases * 4 bits = 64 bits max
-        return Err(NucleotideError::SequenceTooLong(seq.len()));
+        return Err(Error::SequenceTooLong(seq.len()));
     }
     let mut packed = 0u64;
     for (i, &base) in seq.iter().enumerate() {
@@ -25,14 +25,14 @@ pub fn as_4bit(seq: &[u8]) -> Result<u64, NucleotideError> {
             b'D' | b'd' => 0b1111, // A, G, or T (not C)
             b'H' | b'h' => 0b1111, // A, C, or T (not G)
             b'V' | b'v' => 0b1111, // A, C, or G (not T)
-            invalid => return Err(NucleotideError::InvalidBase(invalid)),
+            invalid => return Err(Error::InvalidBase(invalid)),
         };
         packed |= (bits as u64) << (i * 4);
     }
     Ok(packed)
 }
 
-pub fn encode_internal(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), NucleotideError> {
+pub fn encode_internal(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
     // Clear the buffer
     ebuf.clear();
 
@@ -103,14 +103,14 @@ mod tests {
         let long_seq = vec![b'A'; 17];
         assert!(matches!(
             as_4bit(&long_seq),
-            Err(NucleotideError::SequenceTooLong(17))
+            Err(Error::SequenceTooLong(17))
         ));
     }
 
     #[test]
     fn test_as_4bit_invalid_base() {
         let result = as_4bit(b"ACGX");
-        assert!(matches!(result, Err(NucleotideError::InvalidBase(b'X'))));
+        assert!(matches!(result, Err(Error::InvalidBase(b'X'))));
     }
 
     #[test]
