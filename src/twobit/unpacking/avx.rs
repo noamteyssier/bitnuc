@@ -1,4 +1,4 @@
-use crate::NucleotideError;
+use crate::Error;
 use std::arch::x86_64::*;
 
 #[inline(always)]
@@ -51,9 +51,9 @@ pub unsafe fn from_2bit_simd(
     packed: u64,
     expected_size: usize,
     sequence: &mut Vec<u8>,
-) -> Result<(), NucleotideError> {
+) -> Result<(), Error> {
     if expected_size > 32 {
-        return Err(NucleotideError::InvalidLength(expected_size));
+        return Err(Error::InvalidLength(expected_size));
     }
 
     sequence.reserve(expected_size);
@@ -118,7 +118,7 @@ pub unsafe fn from_2bit_multi_simd(
     ebuf: &[u64],
     n_bases: usize,
     sequence: &mut Vec<u8>,
-) -> Result<(), NucleotideError> {
+) -> Result<(), Error> {
     sequence.reserve(n_bases);
 
     // Set up SIMD lookup table once for all chunks

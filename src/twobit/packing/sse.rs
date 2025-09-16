@@ -1,5 +1,5 @@
 use super::naive;
-use crate::NucleotideError;
+use crate::Error;
 use std::arch::x86_64::*;
 
 #[repr(u8)]
@@ -76,9 +76,9 @@ unsafe fn process_simd_chunk(chunk: __m128i, constants: &SimdConstants) -> __m12
     set_bits(c_mask, g_mask, t_mask, constants)
 }
 
-pub fn as_2bit(seq: &[u8]) -> Result<u64, NucleotideError> {
+pub fn as_2bit(seq: &[u8]) -> Result<u64, Error> {
     if seq.len() > 32 {
-        return Err(NucleotideError::SequenceTooLong(seq.len()));
+        return Err(Error::SequenceTooLong(seq.len()));
     }
 
     // Keep the same threshold as your AARCH64 version
@@ -91,7 +91,7 @@ pub fn as_2bit(seq: &[u8]) -> Result<u64, NucleotideError> {
         .iter()
         .find(|&&b| !matches!(b, b'A' | b'a' | b'C' | b'c' | b'G' | b'g' | b'T' | b't'))
     {
-        return Err(NucleotideError::InvalidBase(invalid));
+        return Err(Error::InvalidBase(invalid));
     }
 
     let mut packed = 0u64;
@@ -131,7 +131,7 @@ pub fn as_2bit(seq: &[u8]) -> Result<u64, NucleotideError> {
     Ok(packed)
 }
 
-pub fn encode_internal(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), NucleotideError> {
+pub fn encode_internal(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
     // Clear the buffer
     ebuf.clear();
 

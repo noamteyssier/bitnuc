@@ -4,14 +4,10 @@ mod aarch64;
 mod avx;
 mod naive;
 
-use crate::NucleotideError;
+use crate::Error;
 
 /// Converts an arbitrary sized 2-bit packed representation back into a nucleotide sequence.
-pub fn from_2bit_multi(
-    ebuf: &[u64],
-    n_bases: usize,
-    dbuf: &mut Vec<u8>,
-) -> Result<(), NucleotideError> {
+pub fn from_2bit_multi(ebuf: &[u64], n_bases: usize, dbuf: &mut Vec<u8>) -> Result<(), Error> {
     #[cfg(all(target_arch = "aarch64", not(feature = "nosimd")))]
     if std::arch::is_aarch64_feature_detected!("neon") {
         return aarch64::fast_decode(ebuf, n_bases, dbuf);
@@ -40,7 +36,7 @@ pub fn from_2bit_multi(
 
     // Process the last one with the remainder
     ebuf.get(n_chunks - 1)
-        .map_or(Err(NucleotideError::InvalidLength(n_bases)), |&component| {
+        .map_or(Err(Error::InvalidLength(n_bases)), |&component| {
             from_2bit(component, rem, dbuf)
         })?;
 
@@ -62,7 +58,7 @@ pub fn from_2bit_multi(
 ///
 /// # Errors
 ///
-/// Returns `NucleotideError::InvalidLength` if `expected_size` is greater than 32
+/// Returns `Error::InvalidLength` if `expected_size` is greater than 32
 /// (as a u64 can only store 32 * 2 bits).
 ///
 /// # Examples
@@ -88,13 +84,13 @@ pub fn from_2bit_multi(
 ///
 /// Error handling:
 /// ```rust
-/// use bitnuc::{from_2bit, NucleotideError};
+/// use bitnuc::{from_2bit, Error};
 ///
 /// # fn main() {
 /// // Length too long
 /// assert!(matches!(
 ///     from_2bit(0, 33, &mut Vec::new()),
-///     Err(NucleotideError::InvalidLength(33))
+///     Err(Error::InvalidLength(33))
 /// ));
 /// # }
 /// ```
@@ -116,11 +112,7 @@ pub fn from_2bit_multi(
 /// # Ok(())
 /// # }
 /// ```
-pub fn from_2bit(
-    packed: u64,
-    expected_size: usize,
-    sequence: &mut Vec<u8>,
-) -> Result<(), NucleotideError> {
+pub fn from_2bit(packed: u64, expected_size: usize, sequence: &mut Vec<u8>) -> Result<(), Error> {
     #[cfg(all(target_arch = "aarch64", not(feature = "nosimd")))]
     if std::arch::is_aarch64_feature_detected!("neon") {
         unsafe { aarch64::from_2bit_simd(packed, expected_size, sequence) }
@@ -159,7 +151,7 @@ pub fn from_2bit(
 ///
 /// # Errors
 ///
-/// Returns `NucleotideError::InvalidLength` if `expected_size` is greater than 32
+/// Returns `Error::InvalidLength` if `expected_size` is greater than 32
 ///
 /// # Examples
 ///
@@ -175,7 +167,7 @@ pub fn from_2bit(
 /// # Ok(())
 /// # }
 /// ```
-pub fn from_2bit_alloc(packed: u64, expected_size: usize) -> Result<Vec<u8>, NucleotideError> {
+pub fn from_2bit_alloc(packed: u64, expected_size: usize) -> Result<Vec<u8>, Error> {
     let mut sequence = Vec::with_capacity(expected_size);
     from_2bit(packed, expected_size, &mut sequence)?;
     Ok(sequence)

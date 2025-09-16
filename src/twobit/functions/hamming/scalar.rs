@@ -1,4 +1,4 @@
-use crate::NucleotideError;
+use crate::Error;
 
 // Create masks for lower and upper bits of each 2-bit group
 const LOWER_BITS: u64 = 0x5555555555555555;
@@ -8,10 +8,10 @@ const UPPER_BITS: u64 = 0xAAAAAAAAAAAAAAAA;
 /// Each u64 can contain up to 32 bases (2 bits per base)
 /// len must be <= 32
 #[inline]
-pub fn hdist_scalar(u: u64, v: u64, len: usize) -> Result<u32, NucleotideError> {
+pub fn hdist_scalar(u: u64, v: u64, len: usize) -> Result<u32, Error> {
     // Validate length
     if len > 32 {
-        return Err(NucleotideError::InvalidLength(len));
+        return Err(Error::InvalidLength(len));
     }
 
     // For empty sequences, distance is 0

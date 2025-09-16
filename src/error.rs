@@ -1,7 +1,7 @@
 use std::fmt;
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum NucleotideError {
+pub enum Error {
     InvalidBase(u8),
     SequenceTooLong(usize),
     InvalidLength(usize),
@@ -17,31 +17,31 @@ pub enum NucleotideError {
     Unsupported,
 }
 
-impl fmt::Display for NucleotideError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            NucleotideError::InvalidBase(b) => write!(f, "Invalid nucleotide base: {}", b),
-            NucleotideError::SequenceTooLong(len) => {
+            Error::InvalidBase(b) => write!(f, "Invalid nucleotide base: {}", b),
+            Error::SequenceTooLong(len) => {
                 write!(f, "Sequence length {} exceeds maximum", len)
             }
-            NucleotideError::InvalidLength(len) => write!(f, "Invalid length: {}", len),
-            NucleotideError::IndexOutOfBounds { index, length } => {
+            Error::InvalidLength(len) => write!(f, "Invalid length: {}", len),
+            Error::IndexOutOfBounds { index, length } => {
                 write!(
                     f,
                     "Index {} out of bounds for sequence of length {}",
                     index, length
                 )
             }
-            NucleotideError::InvalidRange { start, end, length } => {
+            Error::InvalidRange { start, end, length } => {
                 write!(
                     f,
                     "Invalid range {}..{} for sequence of length {}",
                     start, end, length
                 )
             }
-            NucleotideError::Unsupported => write!(f, "Unsupported architecture"),
+            Error::Unsupported => write!(f, "Unsupported architecture"),
         }
     }
 }
 
-impl std::error::Error for NucleotideError {}
+impl std::error::Error for Error {}

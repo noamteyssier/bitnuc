@@ -1,4 +1,4 @@
-use crate::NucleotideError;
+use crate::Error;
 
 #[cfg(all(target_arch = "aarch64", not(feature = "nosimd")))]
 mod aarch64;
@@ -29,10 +29,10 @@ mod sse;
 ///
 /// # Errors
 ///
-/// Returns `NucleotideError::InvalidBase` if the sequence contains any characters
+/// Returns `Error::InvalidBase` if the sequence contains any characters
 /// other than A,C,G,T (case insensitive).
 ///
-/// Returns `NucleotideError::SequenceTooLong` if the input sequence is longer
+/// Returns `Error::SequenceTooLong` if the input sequence is longer
 /// than 32 bases (as a u64 can only store 32 * 2 bits).
 ///
 /// # Examples
@@ -60,25 +60,25 @@ mod sse;
 ///
 /// Error handling:
 /// ```rust
-/// use bitnuc::{as_2bit, NucleotideError};
+/// use bitnuc::{as_2bit, Error};
 ///
 /// # fn main() {
 /// // Invalid base
 /// assert!(matches!(
 ///     as_2bit(b"ACGN"),
-///     Err(NucleotideError::InvalidBase(b'N'))
+///     Err(Error::InvalidBase(b'N'))
 /// ));
 ///
 /// // Sequence too long
 /// let long_seq = vec![b'A'; 33];
 /// assert!(matches!(
 ///     as_2bit(&long_seq),
-///     Err(NucleotideError::SequenceTooLong(33))
+///     Err(Error::SequenceTooLong(33))
 /// ));
 /// # }
 /// ```
 #[inline(always)]
-pub fn as_2bit(seq: &[u8]) -> Result<u64, NucleotideError> {
+pub fn as_2bit(seq: &[u8]) -> Result<u64, Error> {
     #[cfg(all(target_arch = "aarch64", not(feature = "nosimd")))]
     if std::arch::is_aarch64_feature_detected!("neon") {
         aarch64::as_2bit(seq)
@@ -110,7 +110,7 @@ pub fn as_2bit(seq: &[u8]) -> Result<u64, NucleotideError> {
 }
 
 #[inline(always)]
-pub fn encode_internal(seq: &[u8], ebuf: &mut Vec<u64>) -> Result<(), NucleotideError> {
+pub fn encode_internal(seq: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
     #[cfg(all(target_arch = "aarch64", not(feature = "nosimd")))]
     if std::arch::is_aarch64_feature_detected!("neon") {
         aarch64::encode_internal(seq, ebuf)
@@ -184,7 +184,7 @@ mod testing {
     #[test]
     fn test_as_2bit_invalid_base() {
         let result = as_2bit(b"ACGN");
-        assert!(matches!(result, Err(NucleotideError::InvalidBase(b'N'))));
+        assert!(matches!(result, Err(Error::InvalidBase(b'N'))));
     }
 
     #[test]
@@ -192,7 +192,7 @@ mod testing {
         let long_seq = vec![b'A'; 33];
         assert!(matches!(
             as_2bit(&long_seq),
-            Err(NucleotideError::SequenceTooLong(33))
+            Err(Error::SequenceTooLong(33))
         ));
     }
 }

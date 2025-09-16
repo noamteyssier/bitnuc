@@ -1,4 +1,4 @@
-use bitnuc::{as_2bit, decode, encode_alloc, from_2bit};
+use bitnuc::{as_2bit, as_4bit, fourbit, from_2bit, from_4bit, twobit};
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 
 fn generate_sequence(length: usize) -> Vec<u8> {
@@ -20,10 +20,18 @@ fn bench_packing(c: &mut Criterion) {
         let seq = generate_sequence(*size);
 
         group.bench_with_input(
-            BenchmarkId::new(format!("packing_{}", impl_type), size),
+            BenchmarkId::new(format!("packing_2bit_{}", impl_type), size),
             &seq,
             |b, seq| b.iter(|| as_2bit(seq)),
         );
+
+        if *size <= 16 {
+            group.bench_with_input(
+                BenchmarkId::new(format!("packing_4bit_{}", impl_type), size),
+                &seq,
+                |b, seq| b.iter(|| as_4bit(seq)),
+            );
+        }
     }
 
     group.finish();
@@ -41,11 +49,26 @@ fn bench_encoding(c: &mut Criterion) {
     // Test different sequence lengths
     for size in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024].iter() {
         let seq = generate_sequence(*size);
-
+        let mut ebuf = Vec::new();
         group.bench_with_input(
-            BenchmarkId::new(format!("encoding_{}", impl_type), size),
+            BenchmarkId::new(format!("encoding_2bit_{}", impl_type), size),
             &seq,
-            |b, seq| b.iter(|| encode_alloc(seq).unwrap()),
+            |b, seq| {
+                b.iter(|| {
+                    ebuf.clear();
+                    twobit::encode(seq, &mut ebuf).unwrap()
+                })
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new(format!("encoding_4bit_{}", impl_type), size),
+            &seq,
+            |b, seq| {
+                b.iter(|| {
+                    ebuf.clear();
+                    fourbit::encode(seq, &mut ebuf).unwrap()
+                })
+            },
         );
     }
 
@@ -64,13 +87,22 @@ fn bench_unpacking(c: &mut Criterion) {
     // Test different sequence lengths
     for size in [4, 8, 16, 24, 32].iter() {
         let seq = generate_sequence(*size);
-        let packed = as_2bit(&seq).unwrap();
 
+        let packed_2b = as_2bit(&seq).unwrap();
         group.bench_with_input(
-            BenchmarkId::new(format!("unpacking_{}", impl_type), size),
-            &packed,
+            BenchmarkId::new(format!("unpacking_2bit_{}", impl_type), size),
+            &packed_2b,
             |b, packed| b.iter(|| from_2bit(*packed, *size, &mut Vec::new()).unwrap()),
         );
+
+        if *size <= 16 {
+            let packed_4b = as_4bit(&seq).unwrap();
+            group.bench_with_input(
+                BenchmarkId::new(format!("unpacking_4bit_{}", impl_type), size),
+                &packed_4b,
+                |b, packed| b.iter(|| from_4bit(*packed, *size, &mut Vec::new()).unwrap()),
+            );
+        }
     }
 
     group.finish();
@@ -88,12 +120,29 @@ fn bench_decoding(c: &mut Criterion) {
     // Test different sequence lengths
     for size in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024].iter() {
         let seq = generate_sequence(*size);
-        let packed = encode_alloc(&seq).unwrap();
+        let packed = twobit::encode_alloc(&seq).unwrap();
+        let mut dbuf = Vec::new();
 
         group.bench_with_input(
-            BenchmarkId::new(format!("decoding_{}", impl_type), size),
+            BenchmarkId::new(format!("decoding_2bit_{}", impl_type), size),
             &packed,
-            |b, packed| b.iter(|| decode(packed, *size, &mut Vec::new()).unwrap()),
+            |b, packed| {
+                b.iter(|| {
+                    dbuf.clear();
+                    twobit::decode(packed, *size, &mut dbuf).unwrap()
+                })
+            },
+        );
+
+        group.bench_with_input(
+            BenchmarkId::new(format!("decoding_4bit_{}", impl_type), size),
+            &packed,
+            |b, packed| {
+                b.iter(|| {
+                    dbuf.clear();
+                    fourbit::decode(packed, *size, &mut dbuf).unwrap()
+                })
+            },
         );
     }
 

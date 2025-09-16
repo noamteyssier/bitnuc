@@ -10,6 +10,7 @@ A library for efficient nucleotide sequence manipulation using 2-bit encoding.
 ## Features
 
 - 2-bit nucleotide encoding (A=00, C=01, G=10, T=11)
+- 4-bit nucleotide encoding (A=0000, C=0001, G=0010, T=0011, N=1111)
 - Direct bit manipulation functions for custom implementations
 - Higher-level sequence type with additional analysis features
 
@@ -137,54 +138,24 @@ This means you can store 4 times as many sequences in the same amount of memory.
 
 ## Error Handling
 
-All operations that could fail return a [`Result`] with [`NucleotideError`]:
+All operations that could fail return a [`Result`] with [`Error`]:
 
 ```rust
-use bitnuc::{as_2bit, NucleotideError};
+use bitnuc::{as_2bit, Error};
 
 // Invalid nucleotide
 let err = as_2bit(b"ACGN").unwrap_err();
-assert!(matches!(err, NucleotideError::InvalidBase(b'N')));
+assert!(matches!(err, Error::InvalidBase(b'N')));
 
 // Sequence too long
 let long_seq = vec![b'A'; 33];
 let err = as_2bit(&long_seq).unwrap_err();
-assert!(matches!(err, NucleotideError::SequenceTooLong(33)));
+assert!(matches!(err, Error::SequenceTooLong(33)));
 ```
-
-## Performance Considerations
-
-When working with many short sequences (like k-mers), using `as_2bit` and `from_2bit`
-directly can be more efficient than creating [`PackedSequence`] instances:
-
-```rust
-use bitnuc::{as_2bit, from_2bit};
-use std::collections::HashMap;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Efficient k-mer counting
-    let mut kmer_counts = HashMap::new();
-
-    // Pack k-mers directly into u64s
-    let sequence = b"ACGTACGT";
-    for window in sequence.windows(4) {
-        let packed = as_2bit(window)?;
-        *kmer_counts.entry(packed).or_insert(0) += 1;
-    }
-
-    // Count of "ACGT"
-    let acgt_packed = as_2bit(b"ACGT")?;
-    assert_eq!(kmer_counts.get(&acgt_packed), Some(&2));
-    Ok(())
-}
-```
-
-See the documentation for [`as_2bit`] and [`from_2bit`] for more details on
-working with packed sequences directly.
 
 ## SIMD Acceleration
 
-`as_2bit`, `from_2bit`, `encode`, and `decode` are optionally SIMD accelerated depending on the architecture of your system.
+`as_2bit`, `from_2bit`, `as_4bit`, `from_4bit`, and both twobit and fourbit `encode`, and `decode` are optionally SIMD accelerated depending on the architecture of your system.
 By default, SIMD instructions are used, but they can be shut-off using the `nosimd` feature flag.
 
 For increased performance and to really take advantage of the SIMD I recommend compiling with:
