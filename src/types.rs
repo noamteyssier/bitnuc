@@ -1,21 +1,43 @@
 use crate::{fourbit, twobit, Error};
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Default, Copy)]
-pub enum NucSize {
+pub enum BitSize {
     #[default]
     Two,
     Four,
+}
+impl Into<u8> for BitSize {
+    fn into(self) -> u8 {
+        match self {
+            BitSize::Two => 2,
+            BitSize::Four => 4,
+        }
+    }
+}
+impl BitSize {
+    pub fn encode(&self, seq: &[u8], data: &mut Vec<u64>) -> Result<(), Error> {
+        match self {
+            BitSize::Two => twobit::encode(seq, data),
+            BitSize::Four => fourbit::encode(seq, data),
+        }
+    }
+    pub fn decode(&self, data: &[u64], length: usize, buf: &mut Vec<u8>) -> Result<(), Error> {
+        match self {
+            BitSize::Two => twobit::decode(data, length, buf),
+            BitSize::Four => fourbit::decode(data, length, buf),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Default)]
 pub struct BitNuc {
     data: Vec<u64>,
     length: usize,
-    size: NucSize,
+    size: BitSize,
 }
 
 impl BitNuc {
-    pub fn new(size: NucSize) -> Self {
+    pub fn new(size: BitSize) -> Self {
         BitNuc {
             data: Vec::new(),
             length: 0,
@@ -24,11 +46,11 @@ impl BitNuc {
     }
 
     pub fn new_2bit() -> Self {
-        BitNuc::new(NucSize::Two)
+        BitNuc::new(BitSize::Two)
     }
 
     pub fn new_4bit() -> Self {
-        BitNuc::new(NucSize::Four)
+        BitNuc::new(BitSize::Four)
     }
 
     pub fn clear(&mut self) {
@@ -47,8 +69,8 @@ impl BitNuc {
     pub fn fill(&mut self, seq: &[u8]) -> Result<(), Error> {
         self.clear();
         match self.size {
-            NucSize::Two => twobit::encode(seq, &mut self.data),
-            NucSize::Four => fourbit::encode(seq, &mut self.data),
+            BitSize::Two => twobit::encode(seq, &mut self.data),
+            BitSize::Four => fourbit::encode(seq, &mut self.data),
         }?;
         self.length = seq.len();
         Ok(())
@@ -56,8 +78,8 @@ impl BitNuc {
 
     pub fn decode_into(&self, buf: &mut Vec<u8>) -> Result<(), Error> {
         match self.size {
-            NucSize::Two => twobit::decode(&self.data, self.length, buf),
-            NucSize::Four => fourbit::decode(&self.data, self.length, buf),
+            BitSize::Two => twobit::decode(&self.data, self.length, buf),
+            BitSize::Four => fourbit::decode(&self.data, self.length, buf),
         }
     }
 
