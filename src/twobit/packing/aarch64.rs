@@ -36,6 +36,7 @@ impl SimdConstants {
 ///
 /// This function combines equality comparisons for both cases of a nucleotide
 /// to create a single mask where matching positions are set to all 1s.
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn create_dual_pattern_mask(chunk: uint8x8_t, upper: u8, lower: u8) -> uint8x8_t {
     vorr_u8(
@@ -45,6 +46,7 @@ unsafe fn create_dual_pattern_mask(chunk: uint8x8_t, upper: u8, lower: u8) -> ui
 }
 
 /// Sets the appropriate 2-bit patterns based on nucleotide masks
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn set_bits(
     c_mask: uint8x8_t,
@@ -61,6 +63,7 @@ unsafe fn set_bits(
 }
 
 /// Processes a single SIMD chunk of 8 nucleotides
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn process_simd_chunk(chunk: uint8x8_t, constants: &SimdConstants) -> uint8x8_t {
     let (c_mask, g_mask, t_mask) = (
@@ -153,6 +156,7 @@ pub unsafe fn encode_16_nucleotides(nucs: uint8x16_t) -> u32 {
 }
 
 /// Return `true` if every byte in `v` is a valid nucleotide (case‑insensitive).
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn valid_block(v: uint8x16_t) -> bool {
     let lower = vorrq_u8(v, vdupq_n_u8(0x20));
@@ -170,6 +174,7 @@ unsafe fn valid_block(v: uint8x16_t) -> bool {
 /// * `output` must be large enough; otherwise `Err(())` is returned.
 /// * On any invalid byte the function zero‑fills `output` and returns `Err(())`.
 #[cfg(target_arch = "aarch64")]
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 pub unsafe fn encode_nucleotides_simd(
     input: &[u8],
