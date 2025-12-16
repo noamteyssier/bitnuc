@@ -126,8 +126,6 @@ pub unsafe fn from_2bit_multi_simd(
     n_bases: usize,
     sequence: &mut Vec<u8>,
 ) -> Result<(), Error> {
-    sequence.reserve(n_bases);
-
     // Set up SIMD lookup table once for all chunks
     let lookup = _mm256_setr_epi8(
         b'A' as i8, b'C' as i8, b'G' as i8, b'T' as i8, b'A' as i8, b'C' as i8, b'G' as i8,
@@ -137,14 +135,20 @@ pub unsafe fn from_2bit_multi_simd(
         b'A' as i8, b'C' as i8, b'G' as i8, b'T' as i8,
     );
 
+    // Pre-allocate exact capacity and set length upfront
+    let old_len = sequence.len();
+    sequence.reserve(n_bases);
+
+    // Get raw pointer to write position
+    let mut out_ptr = sequence.as_mut_ptr().add(old_len);
+
     // Process full 32-base chunks
     let full_chunks = n_bases / 32;
-    let mut temp = [0u8; 32];
 
     for &chunk in ebuf.iter().take(full_chunks) {
         let result = unpack_32_bases(chunk, lookup);
-        _mm256_storeu_si256(temp.as_mut_ptr() as *mut __m256i, result);
-        sequence.extend_from_slice(&temp);
+        _mm256_storeu_si256(out_ptr as *mut __m256i, result);
+        out_ptr = out_ptr.add(32);
     }
 
     // Handle remaining bases if any
@@ -152,9 +156,15 @@ pub unsafe fn from_2bit_multi_simd(
     if remaining_bases > 0 {
         let last_chunk = ebuf[full_chunks];
         let result = unpack_32_bases(last_chunk, lookup);
+
+        // Store to temporary then copy only what we need
+        let mut temp = [0u8; 32];
         _mm256_storeu_si256(temp.as_mut_ptr() as *mut __m256i, result);
-        sequence.extend_from_slice(&temp[..remaining_bases]);
+        std::ptr::copy_nonoverlapping(temp.as_ptr(), out_ptr, remaining_bases);
     }
+
+    // Update the length after all writes are complete
+    sequence.set_len(old_len + n_bases);
 
     Ok(())
 }
