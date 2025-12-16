@@ -79,7 +79,7 @@ pub fn as_2bit(seq: &[u8], allow_invalid: bool) -> Result<u64, Error> {
     }
 
     if seq.len() < 8 {
-        return naive::as_2bit(seq);
+        return naive::as_2bit(seq, allow_invalid);
     }
 
     // Pre-validate all bases using SIMD when possible
