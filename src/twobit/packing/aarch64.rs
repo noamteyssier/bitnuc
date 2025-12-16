@@ -73,7 +73,7 @@ unsafe fn process_simd_chunk(chunk: uint8x8_t, constants: &SimdConstants) -> uin
 
 #[cfg(target_arch = "aarch64")]
 #[inline(always)]
-pub fn as_2bit(seq: &[u8]) -> Result<u64, Error> {
+pub fn as_2bit(seq: &[u8], allow_invalid: bool) -> Result<u64, Error> {
     if seq.len() > 32 {
         return Err(Error::SequenceTooLong(seq.len()));
     }
@@ -83,9 +83,10 @@ pub fn as_2bit(seq: &[u8]) -> Result<u64, Error> {
     }
 
     // Pre-validate all bases using SIMD when possible
-    if let Some(&invalid) = seq
-        .iter()
-        .find(|&&b| !matches!(b, b'A' | b'a' | b'C' | b'c' | b'G' | b'g' | b'T' | b't'))
+    if !allow_invalid
+        && let Some(&invalid) = seq
+            .iter()
+            .find(|&&b| !matches!(b, b'A' | b'a' | b'C' | b'c' | b'G' | b'g' | b'T' | b't'))
     {
         return Err(Error::InvalidBase(invalid));
     }
@@ -118,7 +119,7 @@ pub fn as_2bit(seq: &[u8]) -> Result<u64, Error> {
                 b'C' | b'c' => NucleotideBits::C as u64,
                 b'G' | b'g' => NucleotideBits::G as u64,
                 b'T' | b't' => NucleotideBits::T as u64,
-                _ => unreachable!(),
+                _ => NucleotideBits::A as u64, // silently map to A
             };
             packed |= bits << ((simd_len + i) * 2);
         }
@@ -170,7 +171,11 @@ unsafe fn valid_block(v: uint8x16_t) -> bool {
 /// * On any invalid byte the function zero‑fills `output` and returns `Err(())`.
 #[cfg(target_arch = "aarch64")]
 #[inline(always)]
-pub unsafe fn encode_nucleotides_simd(input: &[u8], output: &mut [u64]) -> Result<(), Error> {
+pub unsafe fn encode_nucleotides_simd(
+    input: &[u8],
+    output: &mut [u64],
+    allow_invalid: bool,
+) -> Result<(), Error> {
     // If less than 32 nt, we can with the default method before SIMD overhead
     if input.len() < 32 {
         let tail = as_2bit(input)?;
@@ -188,7 +193,9 @@ pub unsafe fn encode_nucleotides_simd(input: &[u8], output: &mut [u64]) -> Resul
     while left >= 32 {
         let v0 = vld1q_u8(ip);
         let v1 = vld1q_u8(ip.add(16));
-        if !valid_block(v0) || !valid_block(v1) {
+
+        if !allow_invalid && (!valid_block(v0) || !valid_block(v1)) {
+            output.fill(0);
             return Err(Error::InvalidBase(*ip));
         }
         *out = (encode_16_nucleotides(v0) as u64) | ((encode_16_nucleotides(v1) as u64) << 32);
@@ -207,7 +214,13 @@ pub unsafe fn encode_nucleotides_simd(input: &[u8], output: &mut [u64]) -> Resul
                 b'c' => 1u64,
                 b'g' => 2u64,
                 b't' => 3u64,
-                _ => return Err(Error::InvalidBase(*ip.add(i))),
+                _ => {
+                    if allow_invalid {
+                        0u64
+                    } else {
+                        return Err(Error::InvalidBase(*ip.add(i)));
+                    }
+                }
             } << (2 * i);
         }
         *out = tail;
@@ -216,10 +229,14 @@ pub unsafe fn encode_nucleotides_simd(input: &[u8], output: &mut [u64]) -> Resul
 }
 
 #[inline(always)]
-pub fn encode_internal(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
+pub fn encode_internal(
+    sequence: &[u8],
+    ebuf: &mut Vec<u64>,
+    allow_invalid: bool,
+) -> Result<(), Error> {
     if sequence.len() < 32 {
         // Use the naive method for small sequences
-        let bits = as_2bit(sequence)?;
+        let bits = as_2bit(sequence, allow_invalid)?;
         ebuf.push(bits);
         return Ok(());
     }
@@ -231,7 +248,7 @@ pub fn encode_internal(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error
             // resize the buffer to fit the number of chunks
             let n_chunks = sequence.len().div_ceil(32);
             ebuf.resize(n_chunks, 0);
-            encode_nucleotides_simd(sequence, ebuf)?;
+            encode_nucleotides_simd(sequence, ebuf, allow_invalid)?;
         }
         return Ok(());
     }
