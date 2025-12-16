@@ -183,7 +183,7 @@ pub unsafe fn encode_nucleotides_simd(
 ) -> Result<(), Error> {
     // If less than 32 nt, we can with the default method before SIMD overhead
     if input.len() < 32 {
-        let tail = as_2bit(input)?;
+        let tail = as_2bit(input, allow_invalid)?;
         output[0] = tail;
         return Ok(());
     }
