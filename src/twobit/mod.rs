@@ -19,7 +19,12 @@ use crate::Error;
 ///
 /// If the sequence cannot be encoded, an error is returned.
 pub fn encode(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
-    encode_internal(sequence, ebuf)?;
+    encode_internal(sequence, ebuf, false)?;
+    Ok(())
+}
+
+pub fn encode_with_invalid(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
+    encode_internal(sequence, ebuf, true)?;
     Ok(())
 }
 

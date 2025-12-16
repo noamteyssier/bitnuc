@@ -2,6 +2,7 @@ use std::arch::x86_64::*;
 
 use crate::Error;
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn unpack_4_bases(packed: u64, lookup: __m128i) -> __m128i {
     let mut indices = [0u8; 16];
@@ -13,6 +14,7 @@ unsafe fn unpack_4_bases(packed: u64, lookup: __m128i) -> __m128i {
     _mm_shuffle_epi8(lookup, index_vec)
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn unpack_8_bases(packed: u64, lookup: __m128i) -> __m128i {
     let mut indices = [0u8; 16];
@@ -24,6 +26,7 @@ unsafe fn unpack_8_bases(packed: u64, lookup: __m128i) -> __m128i {
     _mm_shuffle_epi8(lookup, index_vec)
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn unpack_16_bases(packed: u64, lookup: __m128i) -> __m128i {
     let mut indices = [0u8; 16];
@@ -35,6 +38,7 @@ unsafe fn unpack_16_bases(packed: u64, lookup: __m128i) -> __m128i {
 }
 
 /// Unpack 32 4-bit encoded bases from two u64s into 32 ASCII nucleotides
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn unpack_32_bases(packed1: u64, packed2: u64, lookup: __m256i) -> __m256i {
     // Extract nibbles from both u64s into a 32-byte array
@@ -61,6 +65,7 @@ unsafe fn unpack_32_bases(packed1: u64, packed2: u64, lookup: __m256i) -> __m256
     _mm256_shuffle_epi8(lookup, index_vec)
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn process_remainder_4bit(packed: u64, start: usize, end: usize, sequence: &mut Vec<u8>) {
     static LOOKUP: [u8; 16] = [
@@ -83,6 +88,7 @@ unsafe fn process_remainder_4bit(packed: u64, start: usize, end: usize, sequence
     sequence.set_len(old_len + count);
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 pub unsafe fn from_4bit_simd(
     packed: u64,
     expected_size: usize,
@@ -150,6 +156,7 @@ pub unsafe fn from_4bit_simd(
     Ok(())
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 pub unsafe fn decode_internal(
     ebuf: &[u64],

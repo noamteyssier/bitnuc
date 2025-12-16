@@ -21,6 +21,7 @@ struct SimdConstants4 {
 }
 
 impl SimdConstants4 {
+    #[allow(unsafe_op_in_unsafe_fn)]
     #[inline(always)]
     unsafe fn new() -> Self {
         Self {
@@ -33,6 +34,7 @@ impl SimdConstants4 {
     }
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn create_dual_pattern_mask(chunk: __m256i, upper: i8, lower: i8) -> __m256i {
     _mm256_or_si256(
@@ -41,6 +43,7 @@ unsafe fn create_dual_pattern_mask(chunk: __m256i, upper: i8, lower: i8) -> __m2
     )
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn create_ambiguous_mask(chunk: __m256i) -> __m256i {
     // Create masks for all ambiguous IUPAC codes
@@ -84,6 +87,7 @@ unsafe fn create_ambiguous_mask(chunk: __m256i) -> __m256i {
     )
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn set_bits_4bit(
     c_mask: __m256i,
@@ -115,6 +119,7 @@ unsafe fn set_bits_4bit(
     result
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn process_simd_chunk_4bit(chunk: __m256i, constants: &SimdConstants4) -> __m256i {
     let c_mask = create_dual_pattern_mask(chunk, b'C' as i8, b'c' as i8);

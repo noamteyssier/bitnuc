@@ -1,6 +1,7 @@
 use crate::Error;
 use std::arch::x86_64::*;
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn unpack_8_bases(packed: u64, lookup: __m128i) -> __m128i {
     let mut indices = [0u8; 16];
@@ -12,6 +13,7 @@ unsafe fn unpack_8_bases(packed: u64, lookup: __m128i) -> __m128i {
     _mm_shuffle_epi8(lookup, index_vec)
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn unpack_16_bases(packed: u64, lookup: __m128i) -> __m128i {
     let mut indices = [0u8; 16];
@@ -22,6 +24,7 @@ unsafe fn unpack_16_bases(packed: u64, lookup: __m128i) -> __m128i {
     _mm_shuffle_epi8(lookup, index_vec)
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn unpack_32_bases(packed: u64, lookup: __m256i) -> __m256i {
     let mut indices = [0u8; 32];
@@ -39,6 +42,7 @@ unsafe fn unpack_32_bases(packed: u64, lookup: __m256i) -> __m256i {
     _mm256_shuffle_epi8(lookup, index_vec)
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn process_remainder(packed: u64, start: usize, end: usize, sequence: &mut Vec<u8>) {
     static LOOKUP: [u8; 4] = [b'A', b'C', b'G', b'T'];
@@ -54,6 +58,7 @@ unsafe fn process_remainder(packed: u64, start: usize, end: usize, sequence: &mu
     sequence.set_len(old_len + count);
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 pub unsafe fn from_2bit_simd(
     packed: u64,
     expected_size: usize,
@@ -120,6 +125,7 @@ pub unsafe fn from_2bit_simd(
     Ok(())
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 pub unsafe fn from_2bit_multi_simd(
     ebuf: &[u64],
