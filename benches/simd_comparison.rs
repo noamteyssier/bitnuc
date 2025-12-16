@@ -118,14 +118,16 @@ fn bench_decoding(c: &mut Criterion) {
     };
 
     // Test different sequence lengths
-    for size in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024].iter() {
+    let sizes = [32, 128, 512, 2048];
+    for size in sizes.iter() {
         let seq = generate_sequence(*size);
-        let packed = twobit::encode_alloc(&seq).unwrap();
-        let mut dbuf = Vec::new();
+        let packed_2bit = twobit::encode_alloc(&seq).unwrap();
+        let packed_4bit = fourbit::encode_alloc(&seq).unwrap();
+        let mut dbuf = Vec::with_capacity(*size);
 
         group.bench_with_input(
             BenchmarkId::new(format!("decoding_2bit_{}", impl_type), size),
-            &packed,
+            &packed_2bit,
             |b, packed| {
                 b.iter(|| {
                     dbuf.clear();
@@ -136,7 +138,7 @@ fn bench_decoding(c: &mut Criterion) {
 
         group.bench_with_input(
             BenchmarkId::new(format!("decoding_4bit_{}", impl_type), size),
-            &packed,
+            &packed_4bit,
             |b, packed| {
                 b.iter(|| {
                     dbuf.clear();
