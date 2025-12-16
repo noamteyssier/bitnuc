@@ -23,6 +23,7 @@ struct SimdConstants4 {
 }
 
 impl SimdConstants4 {
+    #[allow(unsafe_op_in_unsafe_fn)]
     #[inline(always)]
     unsafe fn new() -> Self {
         Self {
@@ -36,6 +37,7 @@ impl SimdConstants4 {
 }
 
 /// Creates a bitmask for matching both upper and lowercase versions of a nucleotide
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn create_dual_pattern_mask(chunk: uint8x8_t, upper: u8, lower: u8) -> uint8x8_t {
     vorr_u8(
@@ -45,6 +47,7 @@ unsafe fn create_dual_pattern_mask(chunk: uint8x8_t, upper: u8, lower: u8) -> ui
 }
 
 /// Creates a mask for all ambiguous IUPAC codes
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn create_ambiguous_mask(chunk: uint8x8_t) -> uint8x8_t {
     // Create masks for all ambiguous IUPAC codes
@@ -86,6 +89,7 @@ unsafe fn create_ambiguous_mask(chunk: uint8x8_t) -> uint8x8_t {
 }
 
 /// Sets the appropriate 4-bit patterns based on nucleotide masks
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn set_bits_4bit(
     c_mask: uint8x8_t,
@@ -106,6 +110,7 @@ unsafe fn set_bits_4bit(
 }
 
 /// Processes a single SIMD chunk of 8 nucleotides
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn process_simd_chunk_4bit(chunk: uint8x8_t, constants: &SimdConstants4) -> uint8x8_t {
     let c_mask = create_dual_pattern_mask(chunk, b'C', b'c');
@@ -206,6 +211,7 @@ fn is_valid_nucleotide_4bit(base: u8) -> bool {
 }
 
 /// Encode 8 ASCII nucleotides into a single u32 using 4-bit encoding
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 pub unsafe fn encode_8_nucleotides_4bit(nucs: uint8x8_t) -> u32 {
     let constants = SimdConstants4::new();
@@ -226,6 +232,7 @@ pub unsafe fn encode_8_nucleotides_4bit(nucs: uint8x8_t) -> u32 {
 }
 
 /// Return true if every byte in v is a valid nucleotide (case-insensitive) or ambiguous code
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn valid_block_4bit(v: uint8x16_t) -> bool {
     // Create masks for all valid nucleotides and ambiguous codes
@@ -290,6 +297,7 @@ unsafe fn valid_block_4bit(v: uint8x16_t) -> bool {
 
 /// Encode an arbitrary-length ASCII slice into packed 4-bit words (u64)
 /// 16 nt per word
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 pub unsafe fn encode_nucleotides_simd_4bit(input: &[u8], output: &mut [u64]) -> Result<(), Error> {
     // If less than 16 nt, use the default method before SIMD overhead

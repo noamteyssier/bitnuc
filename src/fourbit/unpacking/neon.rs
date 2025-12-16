@@ -2,6 +2,7 @@ use std::arch::aarch64::*;
 
 use crate::Error;
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn unpack_4_bases(packed: u64, lookup: uint8x16_t) -> uint8x8_t {
     let mut indices = [0u8; 8];
@@ -13,6 +14,7 @@ unsafe fn unpack_4_bases(packed: u64, lookup: uint8x16_t) -> uint8x8_t {
     vqtbl1_u8(lookup, index_vec) // Use vqtbl1_u8 for 16-element lookup
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn unpack_8_bases(packed: u64, lookup: uint8x16_t) -> uint8x8_t {
     let mut indices = [0u8; 8];
@@ -25,6 +27,7 @@ unsafe fn unpack_8_bases(packed: u64, lookup: uint8x16_t) -> uint8x8_t {
     vqtbl1_u8(lookup, index_vec)
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn unpack_16_bases(packed: u64, lookup: uint8x16_t) -> uint8x16_t {
     let mut indices = [0u8; 16];
@@ -35,6 +38,7 @@ unsafe fn unpack_16_bases(packed: u64, lookup: uint8x16_t) -> uint8x16_t {
     vqtbl1q_u8(lookup, index_vec)
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn process_remainder_4bit(packed: u64, start: usize, end: usize, sequence: &mut Vec<u8>) {
     static LOOKUP: [u8; 16] = [
@@ -57,6 +61,7 @@ unsafe fn process_remainder_4bit(packed: u64, start: usize, end: usize, sequence
     sequence.set_len(old_len + count);
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 pub unsafe fn from_4bit_simd(
     packed: u64,
     expected_size: usize,
@@ -134,6 +139,7 @@ pub unsafe fn from_4bit_simd(
     Ok(())
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 pub unsafe fn decode_internal(
     ebuf: &[u64],
