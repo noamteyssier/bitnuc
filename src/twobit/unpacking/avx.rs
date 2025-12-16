@@ -25,9 +25,16 @@ unsafe fn unpack_16_bases(packed: u64, lookup: __m128i) -> __m128i {
 #[inline(always)]
 unsafe fn unpack_32_bases(packed: u64, lookup: __m256i) -> __m256i {
     let mut indices = [0u8; 32];
-    for (i, v) in indices.iter_mut().enumerate() {
-        *v = ((packed >> (i * 2)) & 0b11) as u8;
+    let bytes = packed.to_le_bytes();
+
+    for (i, &byte) in bytes.iter().enumerate() {
+        let base = i * 4;
+        indices[base] = byte & 0x03;
+        indices[base + 1] = (byte >> 2) & 0x03;
+        indices[base + 2] = (byte >> 4) & 0x03;
+        indices[base + 3] = (byte >> 6) & 0x03;
     }
+
     let index_vec = _mm256_loadu_si256(indices.as_ptr() as *const __m256i);
     _mm256_shuffle_epi8(lookup, index_vec)
 }
