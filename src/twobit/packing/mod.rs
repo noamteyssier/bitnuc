@@ -81,9 +81,9 @@ mod sse;
 pub fn as_2bit(seq: &[u8]) -> Result<u64, Error> {
     #[cfg(all(target_arch = "aarch64", not(feature = "nosimd")))]
     if std::arch::is_aarch64_feature_detected!("neon") {
-        aarch64::as_2bit(seq)
+        aarch64::as_2bit(seq, false)
     } else {
-        naive::as_2bit(seq)
+        naive::as_2bit(seq, false)
     }
 
     #[cfg(all(target_arch = "x86_64", not(feature = "nosimd")))]
