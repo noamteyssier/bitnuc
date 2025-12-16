@@ -34,6 +34,33 @@ unsafe fn unpack_16_bases(packed: u64, lookup: __m128i) -> __m128i {
     _mm_shuffle_epi8(lookup, index_vec)
 }
 
+/// Unpack 32 4-bit encoded bases from two u64s into 32 ASCII nucleotides
+#[inline(always)]
+unsafe fn unpack_32_bases(packed1: u64, packed2: u64, lookup: __m256i) -> __m256i {
+    // Extract nibbles from both u64s into a 32-byte array
+    let mut indices = [0u8; 32];
+
+    // Process first u64 (bases 0-15)
+    let bytes1 = packed1.to_le_bytes();
+    for i in 0..8 {
+        let byte = bytes1[i];
+        indices[i * 2] = byte & 0x0F; // Low nibble
+        indices[i * 2 + 1] = byte >> 4; // High nibble
+    }
+
+    // Process second u64 (bases 16-31)
+    let bytes2 = packed2.to_le_bytes();
+    for i in 0..8 {
+        let byte = bytes2[i];
+        indices[16 + i * 2] = byte & 0x0F;
+        indices[16 + i * 2 + 1] = byte >> 4;
+    }
+
+    // Use SIMD shuffle to convert indices to nucleotides
+    let index_vec = _mm256_loadu_si256(indices.as_ptr() as *const __m256i);
+    _mm256_shuffle_epi8(lookup, index_vec)
+}
+
 #[inline(always)]
 unsafe fn process_remainder_4bit(packed: u64, start: usize, end: usize, sequence: &mut Vec<u8>) {
     static LOOKUP: [u8; 16] = [
@@ -129,35 +156,46 @@ pub unsafe fn decode_internal(
     n_bases: usize,
     sequence: &mut Vec<u8>,
 ) -> Result<(), Error> {
-    sequence.reserve(n_bases);
-
-    // Set up SIMD lookup table once for all chunks
-    let lookup = _mm_setr_epi8(
-        b'A' as i8, b'C' as i8, b'G' as i8, b'T' as i8, // 0-3
-        b'N' as i8, b'N' as i8, b'N' as i8, b'N' as i8, // 4-7
-        b'N' as i8, b'N' as i8, b'N' as i8, b'N' as i8, // 8-11
-        b'N' as i8, b'N' as i8, b'N' as i8, b'N' as i8, // 12-15
+    // Setup lookup table (repeated twice for both 128-bit lanes)
+    let lookup = _mm256_setr_epi8(
+        b'A' as i8, b'C' as i8, b'G' as i8, b'T' as i8, b'N' as i8, b'N' as i8, b'N' as i8,
+        b'N' as i8, b'N' as i8, b'N' as i8, b'N' as i8, b'N' as i8, b'N' as i8, b'N' as i8,
+        b'N' as i8, b'N' as i8, // Repeat for upper 128 bits
+        b'A' as i8, b'C' as i8, b'G' as i8, b'T' as i8, b'N' as i8, b'N' as i8, b'N' as i8,
+        b'N' as i8, b'N' as i8, b'N' as i8, b'N' as i8, b'N' as i8, b'N' as i8, b'N' as i8,
+        b'N' as i8, b'N' as i8,
     );
 
-    // Process full 16-base chunks
-    let full_chunks = n_bases / 16;
-    let mut temp = [0u8; 16];
+    // Pre-allocate and get write pointer
+    let old_len = sequence.len();
+    sequence.reserve(n_bases);
+    let mut out_ptr = sequence.as_mut_ptr().add(old_len);
 
-    for &chunk in ebuf.iter().take(full_chunks) {
-        let result = unpack_16_bases(chunk, lookup);
-        _mm_storeu_si128(temp.as_mut_ptr() as *mut __m128i, result);
-        sequence.extend_from_slice(&temp);
+    // Process 32 bases at a time (2 u64s per iteration)
+    let full_chunks = n_bases / 32;
+
+    for i in 0..full_chunks {
+        let packed1 = ebuf[i * 2];
+        let packed2 = ebuf[i * 2 + 1];
+        let result = unpack_32_bases(packed1, packed2, lookup);
+        _mm256_storeu_si256(out_ptr as *mut __m256i, result);
+        out_ptr = out_ptr.add(32);
     }
 
-    // Handle remaining bases if any
-    let remaining_bases = n_bases % 16;
+    // Handle remaining bases (0-31)
+    let remaining_bases = n_bases % 32;
     if remaining_bases > 0 {
-        let last_chunk = ebuf[full_chunks];
-        let result = unpack_16_bases(last_chunk, lookup);
-        _mm_storeu_si128(temp.as_mut_ptr() as *mut __m128i, result);
-        sequence.extend_from_slice(&temp[..remaining_bases]);
+        let offset = full_chunks * 2;
+        let packed1 = ebuf.get(offset).copied().unwrap_or(0);
+        let packed2 = ebuf.get(offset + 1).copied().unwrap_or(0);
+
+        let result = unpack_32_bases(packed1, packed2, lookup);
+        let mut temp = [0u8; 32];
+        _mm256_storeu_si256(temp.as_mut_ptr() as *mut __m256i, result);
+        std::ptr::copy_nonoverlapping(temp.as_ptr(), out_ptr, remaining_bases);
     }
 
+    sequence.set_len(old_len + n_bases);
     Ok(())
 }
 

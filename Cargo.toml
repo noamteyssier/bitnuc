@@ -1,6 +1,6 @@
 [package]
 name = "bitnuc"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 authors = ["Noam Teyssier <noam.teyssier@arcinstitute.org"]
 repository = "https://github.com/noamteyssier/bitnuc"
