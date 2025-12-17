@@ -21,6 +21,7 @@ struct SimdConstants {
 }
 
 impl SimdConstants {
+    #[allow(unsafe_op_in_unsafe_fn)]
     #[inline(always)]
     unsafe fn new() -> Self {
         Self {
@@ -134,6 +135,7 @@ pub fn as_2bit(seq: &[u8], allow_invalid: bool) -> Result<u64, Error> {
 /// Encode 16 ASCII nucleotides (`A`, `C`, `G`, `T`) into a single `u32`.
 ///
 /// Output layout: nt0 → bits 0‑1 … nt15 → bits 30‑31 (little‑endian).
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 pub unsafe fn encode_16_nucleotides(nucs: uint8x16_t) -> u32 {
     // 1. ASCII → 2‑bit codes: code = ((b >> 1) ^ (b >> 2)) & 3
