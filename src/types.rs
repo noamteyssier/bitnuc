@@ -1,4 +1,4 @@
-use crate::{fourbit, twobit, Error};
+use crate::{Error, fourbit, twobit};
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Default, Copy)]
 pub enum BitSize {

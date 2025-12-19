@@ -1,5 +1,5 @@
 use bitnuc::{as_2bit, as_4bit, fourbit, from_2bit, from_4bit, twobit};
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 
 fn generate_sequence(length: usize) -> Vec<u8> {
     let bases = [b'A', b'C', b'G', b'T'];

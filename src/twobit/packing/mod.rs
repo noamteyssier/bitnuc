@@ -81,21 +81,21 @@ mod sse;
 pub fn as_2bit(seq: &[u8]) -> Result<u64, Error> {
     #[cfg(all(target_arch = "aarch64", not(feature = "nosimd")))]
     if std::arch::is_aarch64_feature_detected!("neon") {
-        aarch64::as_2bit(seq)
+        aarch64::as_2bit(seq, false)
     } else {
-        naive::as_2bit(seq)
+        naive::as_2bit(seq, false)
     }
 
     #[cfg(all(target_arch = "x86_64", not(feature = "nosimd")))]
     if is_x86_feature_detected!("avx2") {
         // Use 256 bit instructions
-        avx::as_2bit(seq)
+        avx::as_2bit(seq, false)
     } else if is_x86_feature_detected!("sse2") {
         // Fall back to 128bit instructions
-        sse::as_2bit(seq)
+        sse::as_2bit(seq, false)
     } else {
         // Cannot make use of SIMD features
-        naive::as_2bit(seq)
+        naive::as_2bit(seq, false)
     }
 
     // Fall back to naive implemention if:
@@ -106,28 +106,28 @@ pub fn as_2bit(seq: &[u8]) -> Result<u64, Error> {
         feature = "nosimd",
         all(not(target_arch = "aarch64"), not(target_arch = "x86_64"),)
     ))]
-    naive::as_2bit(seq)
+    naive::as_2bit(seq, false)
 }
 
 #[inline(always)]
-pub fn encode_internal(seq: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
+pub fn encode_internal(seq: &[u8], ebuf: &mut Vec<u64>, allow_invalid: bool) -> Result<(), Error> {
     #[cfg(all(target_arch = "aarch64", not(feature = "nosimd")))]
     if std::arch::is_aarch64_feature_detected!("neon") {
-        aarch64::encode_internal(seq, ebuf)
+        aarch64::encode_internal(seq, ebuf, allow_invalid)
     } else {
-        naive::encode_internal(seq, ebuf)
+        naive::encode_internal(seq, ebuf, allow_invalid)
     }
 
     #[cfg(all(target_arch = "x86_64", not(feature = "nosimd")))]
     if is_x86_feature_detected!("avx2") {
         // Use 256 bit instructions
-        avx::encode_internal(seq, ebuf)
+        avx::encode_internal(seq, ebuf, allow_invalid)
     } else if is_x86_feature_detected!("sse2") {
         // Fall back to 128bit instructions
-        sse::encode_internal(seq, ebuf)
+        sse::encode_internal(seq, ebuf, allow_invalid)
     } else {
         // Cannot make use of SIMD features
-        naive::encode_internal(seq, ebuf)
+        naive::encode_internal(seq, ebuf, allow_invalid)
     }
 
     // Fall back to naive implemention if:
@@ -138,7 +138,7 @@ pub fn encode_internal(seq: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
         feature = "nosimd",
         all(not(target_arch = "aarch64"), not(target_arch = "x86_64"),)
     ))]
-    naive::encode_internal(seq, ebuf)
+    naive::encode_internal(seq, ebuf, allow_invalid)
 }
 
 #[cfg(test)]

@@ -8,6 +8,7 @@ use crate::Error;
 use super::hdist_scalar;
 
 #[cfg(all(target_arch = "x86_64", not(feature = "nosimd")))]
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline]
 unsafe fn hdist_multi_avx2(ebuf1: &[u64], ebuf2: &[u64], full_chunks: usize) -> u32 {
     let mut total = 0u32;
@@ -67,6 +68,7 @@ unsafe fn hdist_multi_avx2(ebuf1: &[u64], ebuf2: &[u64], full_chunks: usize) -> 
 }
 
 #[cfg(all(target_arch = "aarch64", not(feature = "nosimd")))]
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline]
 unsafe fn hdist_multi_neon(ebuf1: &[u64], ebuf2: &[u64], full_chunks: usize) -> u32 {
     let mut total = 0u32;

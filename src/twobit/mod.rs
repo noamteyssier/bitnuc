@@ -19,7 +19,24 @@ use crate::Error;
 ///
 /// If the sequence cannot be encoded, an error is returned.
 pub fn encode(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
-    encode_internal(sequence, ebuf)?;
+    encode_internal(sequence, ebuf, false)?;
+    Ok(())
+}
+
+/// Encode a sequence into a buffer of 2-bit encoded nucleotides, allowing invalid characters.
+///
+/// Invalid nucleotides are silently encoded as 0 (i.e. `A`)
+///
+/// # Arguments
+///
+/// * `sequence` - The nucleotide sequence to encode.
+/// * `ebuf` - The buffer to write the encoded nucleotides to.
+///
+/// # Errors
+///
+/// If an error occurs during encoding, an error is returned.
+pub fn encode_with_invalid(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
+    encode_internal(sequence, ebuf, true)?;
     Ok(())
 }
 

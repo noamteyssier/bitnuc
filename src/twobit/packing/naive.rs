@@ -1,7 +1,7 @@
 use crate::error::Error;
 
 #[inline(always)]
-pub fn as_2bit(seq: &[u8]) -> Result<u64, Error> {
+pub fn as_2bit(seq: &[u8], allow_invalid: bool) -> Result<u64, Error> {
     if seq.len() > 32 {
         return Err(Error::SequenceTooLong(seq.len()));
     }
@@ -12,14 +12,24 @@ pub fn as_2bit(seq: &[u8]) -> Result<u64, Error> {
             b'C' | b'c' => 0b01,
             b'G' | b'g' => 0b10,
             b'T' | b't' => 0b11,
-            invalid => return Err(Error::InvalidBase(invalid)),
+            invalid => {
+                if allow_invalid {
+                    0b00 // silent conversion to A
+                } else {
+                    return Err(Error::InvalidBase(invalid));
+                }
+            }
         };
         packed |= (bits as u64) << (i * 2);
     }
     Ok(packed)
 }
 
-pub fn encode_internal(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
+pub fn encode_internal(
+    sequence: &[u8],
+    ebuf: &mut Vec<u64>,
+    allow_invalid: bool,
+) -> Result<(), Error> {
     // Clear the buffer
     ebuf.clear();
 
@@ -31,12 +41,12 @@ pub fn encode_internal(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error
         let r_bounds = l_bounds + 32;
         let chunk = &sequence[l_bounds..r_bounds];
 
-        let bits = as_2bit(chunk)?;
+        let bits = as_2bit(chunk, allow_invalid)?;
         ebuf.push(bits);
         l_bounds = r_bounds;
     }
 
-    let bits = as_2bit(&sequence[l_bounds..])?;
+    let bits = as_2bit(&sequence[l_bounds..], allow_invalid)?;
     ebuf.push(bits);
 
     Ok(())

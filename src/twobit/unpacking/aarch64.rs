@@ -1,6 +1,7 @@
 use crate::Error;
 use std::arch::aarch64::*;
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn unpack_8_bases(packed: u64, lookup: uint8x8_t) -> uint8x8_t {
     // Create indices array for 8 bases
@@ -14,6 +15,7 @@ unsafe fn unpack_8_bases(packed: u64, lookup: uint8x8_t) -> uint8x8_t {
     vtbl1_u8(lookup, index_vec)
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn process_remainder(packed: u64, start: usize, end: usize, sequence: &mut Vec<u8>) {
     static LOOKUP: [u8; 4] = [b'A', b'C', b'G', b'T'];
@@ -29,6 +31,7 @@ unsafe fn process_remainder(packed: u64, start: usize, end: usize, sequence: &mu
     sequence.set_len(old_len + count);
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 pub unsafe fn from_2bit_simd(
     packed: u64,
     expected_size: usize,
@@ -63,6 +66,7 @@ pub unsafe fn from_2bit_simd(
 }
 
 /// Decode 16 packed 2‑bit codes (`u32`) to ASCII (`A`, `C`, `G`, `T`).
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 pub unsafe fn decode_16_nucleotides(encoded: u32, dst: *mut u8) {
     // 1. Broadcast the word to four lanes
@@ -97,6 +101,7 @@ pub unsafe fn decode_16_nucleotides(encoded: u32, dst: *mut u8) {
 }
 
 /// Decode a packed 2‑bit stream (`u64` words) back to ASCII nucleotides.
+#[allow(unsafe_op_in_unsafe_fn)]
 pub unsafe fn decode_nucleotides_simd(
     input: &[u64],
     len: usize,

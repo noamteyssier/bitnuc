@@ -19,6 +19,7 @@ struct SimdConstants {
 }
 
 impl SimdConstants {
+    #[allow(unsafe_op_in_unsafe_fn)]
     #[inline(always)]
     unsafe fn new() -> Self {
         Self {
@@ -30,6 +31,7 @@ impl SimdConstants {
     }
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn create_dual_pattern_mask(chunk: __m256i, upper: i8, lower: i8) -> __m256i {
     _mm256_or_si256(
@@ -38,6 +40,7 @@ unsafe fn create_dual_pattern_mask(chunk: __m256i, upper: i8, lower: i8) -> __m2
     )
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn set_bits(
     c_mask: __m256i,
@@ -63,6 +66,7 @@ unsafe fn set_bits(
     result
 }
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[inline(always)]
 unsafe fn process_simd_chunk(chunk: __m256i, constants: &SimdConstants) -> __m256i {
     let (c_mask, g_mask, t_mask) = (
@@ -73,19 +77,20 @@ unsafe fn process_simd_chunk(chunk: __m256i, constants: &SimdConstants) -> __m25
     set_bits(c_mask, g_mask, t_mask, constants)
 }
 
-pub fn as_2bit(seq: &[u8]) -> Result<u64, Error> {
+pub fn as_2bit(seq: &[u8], allow_invalid: bool) -> Result<u64, Error> {
     if seq.len() > 32 {
         return Err(Error::SequenceTooLong(seq.len()));
     }
 
     // Increased minimum length for AVX2
     if seq.len() < 16 {
-        return naive::as_2bit(seq);
+        return naive::as_2bit(seq, allow_invalid);
     }
 
-    if let Some(&invalid) = seq
-        .iter()
-        .find(|&&b| !matches!(b, b'A' | b'a' | b'C' | b'c' | b'G' | b'g' | b'T' | b't'))
+    if !allow_invalid
+        && let Some(&invalid) = seq
+            .iter()
+            .find(|&&b| !matches!(b, b'A' | b'a' | b'C' | b'c' | b'G' | b'g' | b'T' | b't'))
     {
         return Err(Error::InvalidBase(invalid));
     }
@@ -118,7 +123,7 @@ pub fn as_2bit(seq: &[u8]) -> Result<u64, Error> {
                 b'C' | b'c' => NucleotideBits::C as u64,
                 b'G' | b'g' => NucleotideBits::G as u64,
                 b'T' | b't' => NucleotideBits::T as u64,
-                _ => unreachable!(),
+                _ => NucleotideBits::A as u64, // silent conversion to A
             };
             packed |= bits << ((simd_len + i) * 2);
         }
@@ -127,7 +132,11 @@ pub fn as_2bit(seq: &[u8]) -> Result<u64, Error> {
     Ok(packed)
 }
 
-pub fn encode_internal(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
+pub fn encode_internal(
+    sequence: &[u8],
+    ebuf: &mut Vec<u64>,
+    allow_invalid: bool,
+) -> Result<(), Error> {
     // Clear the buffer
     ebuf.clear();
 
@@ -139,12 +148,12 @@ pub fn encode_internal(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error
         let r_bounds = l_bounds + 32;
         let chunk = &sequence[l_bounds..r_bounds];
 
-        let bits = as_2bit(chunk)?;
+        let bits = as_2bit(chunk, allow_invalid)?;
         ebuf.push(bits);
         l_bounds = r_bounds;
     }
 
-    let bits = as_2bit(&sequence[l_bounds..])?;
+    let bits = as_2bit(&sequence[l_bounds..], allow_invalid)?;
     ebuf.push(bits);
 
     Ok(())
