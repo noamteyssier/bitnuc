@@ -3,7 +3,7 @@ pub mod packing;
 pub mod unpacking;
 
 pub use functions::{hdist, hdist_scalar, split_packed};
-pub use packing::{as_2bit, encode_internal};
+pub use packing::{as_2bit, as_2bit_lossy, encode_internal};
 pub use unpacking::{from_2bit, from_2bit_alloc, from_2bit_multi};
 
 use crate::Error;
