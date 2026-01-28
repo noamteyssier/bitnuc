@@ -103,7 +103,7 @@
 //!
 //! ## High-Level Sequence Type
 //!
-//! For more complex sequence manipulation, use the [`PackedSequence`] type:
+//! For more complex sequence manipulation, use the [`BitNuc`] type:
 //!
 //! ```rust
 //! use bitnuc::BitNuc;
