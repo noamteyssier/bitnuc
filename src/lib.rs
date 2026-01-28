@@ -218,7 +218,7 @@ pub use error::Error;
 pub use types::{BitNuc, BitSize};
 
 pub use fourbit::{as_4bit, from_4bit, from_4bit_alloc};
-pub use twobit::{as_2bit, from_2bit, from_2bit_alloc};
+pub use twobit::{as_2bit, as_2bit_lossy, from_2bit, from_2bit_alloc};
 
 #[cfg(test)]
 mod testing {
