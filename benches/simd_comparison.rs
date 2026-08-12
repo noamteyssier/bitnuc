@@ -25,7 +25,7 @@ fn bench_encoding(c: &mut Criterion) {
     let mut group = c.benchmark_group("encoding");
 
     // Test different sequence lengths
-    for size in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024].iter() {
+    for size in [10, 100, 1_000, 10_000, 100_000].iter() {
         group.throughput(Throughput::Bytes(*size as u64));
         let seq = generate_sequence(*size);
 
@@ -54,7 +54,7 @@ fn bench_decoding(c: &mut Criterion) {
     let mut group = c.benchmark_group("decoding");
 
     // Test different sequence lengths
-    let sizes = [32, 128, 512, 2048];
+    let sizes = [10, 100, 1_000, 10_000, 100_000];
     for size in sizes.iter() {
         group.throughput(Throughput::Bytes(*size as u64));
         let seq = generate_sequence(*size);
