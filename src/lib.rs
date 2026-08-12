@@ -212,9 +212,10 @@
 mod error;
 pub mod fourbit;
 pub mod twobit;
+pub mod twobitnew;
 mod types;
 
-pub use error::Error;
+pub use error::{BitnucError, Error};
 pub use types::{BitNuc, BitSize};
 
 pub use fourbit::{as_4bit, from_4bit, from_4bit_alloc};
