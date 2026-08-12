@@ -12,6 +12,7 @@ categories = ["science::bioinformatics", "encoding", "data-structures"]
 
 [dependencies]
 fearless_simd = "0.7.0"
+rand = "0.10.2"
 thiserror = "2.0.20"
 
 [profile.release]
@@ -20,8 +21,6 @@ codegen-units = 1
 
 [dev-dependencies]
 criterion = "0.5.1"
-nucgen = "0.1.2"
-rand = "0.8.7"
 
 [[bench]]
 name = "simd_comparison"

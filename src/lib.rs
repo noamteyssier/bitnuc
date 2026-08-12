@@ -14,8 +14,16 @@ pub use kmer::{as_2bit, from_2bit};
 
 #[cfg(test)]
 mod testing {
+    use rand::{make_rng, rngs::SmallRng, seq::IndexedRandom};
+
     use crate::{BitnucError, as_2bit, from_2bit, *};
-    use nucgen::Sequence;
+
+    const CHARS: [u8; 4] = *b"ACGT";
+
+    fn generate_sequence(n: usize) -> Vec<u8> {
+        let mut rng: SmallRng = make_rng();
+        CHARS.sample(&mut rng, n).copied().collect()
+    }
 
     /// Byte `k` holds bases `4k..4k+4`, base `j` at bits `2*(j % 4)`.
     #[test]
@@ -61,19 +69,17 @@ mod testing {
     /// and the scalar tail.
     #[test]
     fn roundtrip_all_lengths() {
-        let mut rng = rand::thread_rng();
-        let mut seq = Sequence::new();
         let mut ebuf = Vec::new();
         let mut dbuf = Vec::new();
 
         for len in 0..=1025 {
-            seq.fill_buffer(&mut rng, len);
+            let seq = generate_sequence(len);
 
-            encode_resize(seq.bytes(), &mut ebuf);
+            encode_resize(&seq, &mut ebuf);
             assert_eq!(ebuf.len(), len.div_ceil(4));
 
             decode_resize(&ebuf, len, &mut dbuf).unwrap();
-            assert_eq!(&dbuf[..len], seq.bytes(), "roundtrip failed at len {len}");
+            assert_eq!(&dbuf[..len], &seq, "roundtrip failed at len {len}");
         }
     }
 
@@ -81,16 +87,14 @@ mod testing {
     /// encoding — the only place the u64 boundary is crossed.
     #[test]
     fn kmer_is_le_view_of_bytes() {
-        let mut rng = rand::thread_rng();
-        let mut seq = Sequence::new();
         let mut ebuf = Vec::new();
 
         for len in 0..=32 {
-            seq.fill_buffer(&mut rng, len);
+            let seq = generate_sequence(len);
 
-            let packed = as_2bit(seq.bytes()).unwrap();
+            let packed = as_2bit(&seq).unwrap();
 
-            encode_resize(seq.bytes(), &mut ebuf);
+            encode_resize(&seq, &mut ebuf);
             let mut word = [0u8; 8];
             word[..ebuf.len()].copy_from_slice(&ebuf);
             assert_eq!(packed, u64::from_le_bytes(word), "mismatch at len {len}");
@@ -115,20 +119,17 @@ mod testing {
     /// one-u64-per-32-bases packing serialized little-endian (bq compatibility).
     #[test]
     fn padded_bytes_match_legacy_word_stream() {
-        let mut rng = rand::thread_rng();
-        let mut seq = Sequence::new();
         let mut ebuf = Vec::new();
 
         for len in [1, 31, 32, 33, 64, 100, 129] {
-            seq.fill_buffer(&mut rng, len);
+            let seq = generate_sequence(len);
 
             // New path, padded to whole words
-            encode_resize(seq.bytes(), &mut ebuf);
+            encode_resize(&seq, &mut ebuf);
             ebuf.resize(ebuf.len().next_multiple_of(8), 0);
 
             // Legacy path: one u64 per 32 bases, written little-endian
             let legacy: Vec<u8> = seq
-                .bytes()
                 .chunks(32)
                 .flat_map(|chunk| as_2bit(chunk).unwrap().to_le_bytes())
                 .collect();
