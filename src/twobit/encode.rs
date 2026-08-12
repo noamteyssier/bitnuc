@@ -1,6 +1,6 @@
 use core::ops::{BitAnd, BitOr, Shr};
 
-use fearless_simd::{Level, Simd, dispatch, prelude::*, u8x16, u32x4, u32x8, u32x16};
+use fearless_simd::{Simd, dispatch, prelude::*, u8x16, u32x4, u32x8, u32x16};
 
 use crate::BitnucError;
 
@@ -88,8 +88,7 @@ fn pack_8bp_swar(chunk: &[u8], ebuf: &mut [u8]) {
     // OR and shift cascade to pack the 2-bit codes into the low 8 bits of each u32 lane
     let packed = {
         let code = code | (code >> 6);
-        let code = code | (code >> 12);
-        code
+        code | (code >> 12)
     };
 
     ebuf[0] = packed as u8; // update first word
@@ -152,7 +151,7 @@ pub fn encode(seq: &[u8], ebuf: &mut [u8]) -> Result<(), BitnucError> {
         });
     }
 
-    let level = Level::new();
+    let level = super::level();
     dispatch!(level, simd => encode_inner(simd, seq, ebuf));
     Ok(())
 }
@@ -167,6 +166,7 @@ pub fn encode(seq: &[u8], ebuf: &mut [u8]) -> Result<(), BitnucError> {
 /// Uses an uninit-value trick internally but it is safe as
 /// values are immediately overwritten and no uninit values
 /// are returned to the user.
+#[allow(clippy::uninit_vec)]
 pub fn encode_resize(seq: &[u8], ebuf: &mut Vec<u8>) {
     let n_bytes = seq.len().div_ceil(4);
     if ebuf.len() < n_bytes {
@@ -176,6 +176,6 @@ pub fn encode_resize(seq: &[u8], ebuf: &mut Vec<u8>) {
         }
     }
 
-    let level = Level::new();
+    let level = super::level();
     dispatch!(level, simd => encode_inner(simd, seq, &mut ebuf[..n_bytes]));
 }

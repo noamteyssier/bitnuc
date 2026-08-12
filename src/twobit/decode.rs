@@ -1,6 +1,6 @@
 use core::ops::{BitAnd, BitOr, Shl};
 
-use fearless_simd::{Level, Simd, dispatch, prelude::*, u8x16, u8x32, u8x64};
+use fearless_simd::{Simd, dispatch, prelude::*, u8x16, u8x32, u8x64};
 
 use crate::BitnucError;
 
@@ -19,6 +19,7 @@ const DECODE_WORDS: [u32; 256] = {
         let mut word = 0u32;
         let mut k = 0;
         while k < 4 {
+            // unpack base and update word inplace
             word |= (DECODE_LUT[(p >> (2 * k)) & 3] as u32) << (8 * k);
             k += 1;
         }
@@ -137,7 +138,7 @@ pub fn decode(ebuf: &[u8], n: usize, seq: &mut [u8]) -> Result<(), BitnucError> 
         });
     }
 
-    let level = Level::new();
+    let level = super::level();
     dispatch!(level, simd => decode_inner(simd, ebuf, n, seq));
     Ok(())
 }
@@ -152,6 +153,7 @@ pub fn decode(ebuf: &[u8], n: usize, seq: &mut [u8]) -> Result<(), BitnucError> 
 /// Uses an uninit-value trick internally but it is safe as
 /// values are immediately overwritten and no uninit values
 /// are returned to the user.
+#[allow(clippy::uninit_vec)]
 pub fn decode_resize(ebuf: &[u8], n: usize, seq: &mut Vec<u8>) -> Result<(), BitnucError> {
     if seq.len() < n {
         let diff = n - seq.len();
@@ -168,7 +170,7 @@ pub fn decode_resize(ebuf: &[u8], n: usize, seq: &mut Vec<u8>) -> Result<(), Bit
         });
     }
 
-    let level = Level::new();
+    let level = super::level();
     dispatch!(level, simd => decode_inner(simd, ebuf, n, &mut seq[..n]));
     Ok(())
 }

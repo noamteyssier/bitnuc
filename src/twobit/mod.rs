@@ -1,150 +1,51 @@
-pub mod functions;
-pub mod packing;
-pub mod unpacking;
+//! 2-bit nucleotide encoding.
+//!
+//! # Format
+//!
+//! The encoded representation is a byte sequence: byte `k` holds bases
+//! `4k..4k+4`, with base `j` occupying bits `2*(j % 4)..2*(j % 4) + 2` of its
+//! byte (`A=00`, `C=01`, `G=10`, `T=11`). A sequence of `n` bases occupies
+//! exactly `n.div_ceil(4)` bytes, and unused bits of a trailing partial byte
+//! are always zero.
+//!
+//! This definition is endianness-free.
+//!
+//! Endianness is introduced when reinterpreting to a `u64` kmer.
+//! This is used by [`as_2bit`] and [`from_2bit`] which are pinned to
+//! little-endian internally.
+//!
+//! # Ambiguous bases
+//!
+//! Encoding makes no guarantees for bytes outside `ACGTacgt`: invalid bases
+//! map to an unspecified (position-dependent) code rather than an error.
+//! Detect ambiguous bases separately if you need to handle them.
 
-pub use functions::{hdist, hdist_scalar, split_packed};
-pub use packing::{as_2bit, as_2bit_lossy, encode_internal};
-pub use unpacking::{from_2bit, from_2bit_alloc, from_2bit_multi};
+mod decode;
+mod encode;
+mod hamming;
+mod kmer;
 
-use crate::Error;
+pub use decode::{decode, decode_resize};
+pub use encode::{encode, encode_resize};
+pub use hamming::hdist_scalar;
+#[allow(deprecated)]
+pub use kmer::as_2bit_lossy;
+pub use kmer::{as_2bit, from_2bit, from_2bit_alloc};
 
-/// Encode a sequence into a buffer of 2-bit encoded nucleotides.
-///
-/// # Arguments
-///
-/// * `sequence` - The nucleotide sequence to encode.
-/// * `ebuf` - The buffer to write the encoded nucleotides to.
-///
-/// # Errors
-///
-/// If the sequence cannot be encoded, an error is returned.
-pub fn encode(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
-    encode_internal(sequence, ebuf, false)?;
-    Ok(())
-}
+use fearless_simd::Level;
 
-/// Encode a sequence into a buffer of 2-bit encoded nucleotides, allowing invalid characters.
+/// Selects the SIMD level for encode/decode dispatch.
 ///
-/// Invalid nucleotides are silently encoded as 0 (i.e. `A`)
-///
-/// # Arguments
-///
-/// * `sequence` - The nucleotide sequence to encode.
-/// * `ebuf` - The buffer to write the encoded nucleotides to.
-///
-/// # Errors
-///
-/// If an error occurs during encoding, an error is returned.
-pub fn encode_with_invalid(sequence: &[u8], ebuf: &mut Vec<u64>) -> Result<(), Error> {
-    encode_internal(sequence, ebuf, true)?;
-    Ok(())
-}
-
-/// Encode a sequence into a buffer of 2-bit encoded nucleotides.
-///
-/// This function allocates a new buffer to store the encoded nucleotides.
-///
-/// # Arguments
-///
-/// * `sequence` - The nucleotide sequence to encode.
-///
-/// # Errors
-///
-/// If the sequence cannot be encoded, an error is returned.
-pub fn encode_alloc(sequence: &[u8]) -> Result<Vec<u64>, Error> {
-    let mut ebuf = Vec::new();
-    encode(sequence, &mut ebuf)?;
-    Ok(ebuf)
-}
-
-/// Unpacks a 2-bit packed sequence into a nucleotide sequence.
-///
-/// The sequence is a collection of u64 values, where each u64 contains up to 32 nucleotides.
-///
-/// It is expected that the sequence is packed fully (32bp) until the final u64, which may contain
-/// fewer than 32 nucleotides.
-///
-/// # Arguments
-///
-/// * `ebuf` - The buffer containing the packed nucleotides.
-/// * `n_bases` - The number of nucleotides to unpack.
-/// * `dbuf` - The buffer to write the unpacked nucleotides to.
-///
-/// # Errors
-///
-/// If the sequence cannot be unpacked, an error is returned.
-pub fn decode(ebuf: &[u64], n_bases: usize, dbuf: &mut Vec<u8>) -> Result<(), Error> {
-    from_2bit_multi(ebuf, n_bases, dbuf)
-}
-
-#[cfg(test)]
-mod testing {
-    use super::*;
-    use crate::Error;
-    use nucgen::Sequence;
-
-    #[test]
-    fn test_pack_unpack_roundtrip() {
-        let test_cases = [
-            b"A".as_slice(),
-            b"C".as_slice(),
-            b"G".as_slice(),
-            b"T".as_slice(),
-            b"AC".as_slice(),
-            b"GT".as_slice(),
-            b"ACG".as_slice(),
-            b"TGC".as_slice(),
-            b"ACGT".as_slice(),
-            b"TGCA".as_slice(),
-            b"ACGTACGT".as_slice(),
-            b"AAAA".as_slice(),
-            b"CCCC".as_slice(),
-            b"GGGG".as_slice(),
-            b"TTTT".as_slice(),
-        ];
-        let mut unpacked = Vec::new();
-
-        for &seq in &test_cases {
-            let packed = as_2bit(seq).unwrap();
-            from_2bit(packed, seq.len(), &mut unpacked).unwrap();
-            assert_eq!(seq, unpacked.as_slice());
-            unpacked.clear();
-        }
+/// With the `nosimd` feature, forces the scalar fallback level instead of
+/// runtime feature detection.
+#[inline]
+pub(crate) fn level() -> Level {
+    #[cfg(feature = "nosimd")]
+    {
+        Level::fallback()
     }
-
-    #[test]
-    fn test_partial_unpack() {
-        let packed = as_2bit(b"ACGT").unwrap();
-        let mut unpacked = Vec::new();
-
-        from_2bit(packed, 2, &mut unpacked).unwrap();
-        assert_eq!(unpacked, b"AC");
-        unpacked.clear();
-
-        from_2bit(packed, 3, &mut unpacked).unwrap();
-        assert_eq!(unpacked, b"ACG");
-        unpacked.clear();
-    }
-
-    #[test]
-    fn test_large_sequence_round_trip() -> Result<(), Error> {
-        let mut rng = rand::thread_rng();
-        let mut seq = Sequence::new();
-
-        let sizes = 1..=1000;
-
-        for len in sizes {
-            seq.fill_buffer(&mut rng, len);
-
-            let mut ebuf = Vec::new();
-            encode(seq.bytes(), &mut ebuf)?;
-
-            let mut unpacked = Vec::new();
-            decode(&ebuf, len, &mut unpacked)?;
-
-            assert_eq!(seq.bytes(), unpacked.as_slice());
-        }
-
-        Ok(())
+    #[cfg(not(feature = "nosimd"))]
+    {
+        Level::new()
     }
 }
