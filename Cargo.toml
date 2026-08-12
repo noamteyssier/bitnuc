@@ -1,6 +1,6 @@
 [package]
 name = "bitnuc"
-version = "0.4.1"
+version = "0.5.0-dev"
 edition = "2024"
 authors = ["Noam Teyssier <noam.teyssier@arcinstitute.org"]
 repository = "https://github.com/noamteyssier/bitnuc"
@@ -9,6 +9,9 @@ description = "A library for efficient nucleotide sequence manipulation using 2-
 license = "MIT"
 keywords = ["bioinformatics", "dna", "sequence", "nucleotide", "2bit"]
 categories = ["science::bioinformatics", "encoding", "data-structures"]
+
+[dependencies]
+fearless_simd = "0.7.0"
 
 [features]
 nosimd = []
@@ -19,8 +22,8 @@ codegen-units = 1
 
 [dev-dependencies]
 criterion = "0.5.1"
-nucgen = "0.1.1"
-rand = "0.8.5"
+nucgen = "0.1.2"
+rand = "0.8.7"
 
 [[bench]]
 name = "simd_comparison"
