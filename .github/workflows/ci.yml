@@ -22,7 +22,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Build
         run: cargo build --verbose
 
@@ -41,7 +41,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Run Tests
         run: cargo test --verbose ${{ matrix.build_flag }}
 
@@ -49,7 +49,7 @@ jobs:
     name: Coverage
     runs-on: "ubuntu-latest"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Install LLVM-Coverage
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Measure Coverage
