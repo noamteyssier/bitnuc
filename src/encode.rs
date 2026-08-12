@@ -1,6 +1,6 @@
 use core::ops::{BitAnd, BitOr, Shr};
 
-use fearless_simd::{Simd, dispatch, prelude::*, u8x16, u32x4, u32x8, u32x16};
+use fearless_simd::{Level, Simd, dispatch, prelude::*, u8x16, u32x4, u32x8, u32x16};
 
 use crate::BitnucError;
 
@@ -151,7 +151,7 @@ pub fn encode(seq: &[u8], ebuf: &mut [u8]) -> Result<(), BitnucError> {
         });
     }
 
-    let level = super::level();
+    let level = Level::new();
     dispatch!(level, simd => encode_inner(simd, seq, ebuf));
     Ok(())
 }
@@ -176,6 +176,6 @@ pub fn encode_resize(seq: &[u8], ebuf: &mut Vec<u8>) {
         }
     }
 
-    let level = super::level();
+    let level = Level::new();
     dispatch!(level, simd => encode_inner(simd, seq, &mut ebuf[..n_bytes]));
 }
