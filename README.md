@@ -130,6 +130,26 @@ ACGT = 4 bytes = 32 bits
 ACGT = 1 byte = 8 bits
 ```
 
+## Performance
+
+Throughput by sequence length, measured on an Apple M3 Pro with
+`target-cpu=native` (criterion mean, 1 byte per base):
+
+|     bp | encode (GB/s) | decode (GB/s) |
+| -----: | ------------: | ------------: |
+|     10 |           2.3 |           2.2 |
+|    100 |          12.5 |          13.8 |
+|   1000 |          35.4 |          29.7 |
+|  10000 |          38.2 |          34.0 |
+| 100000 |          38.6 |          33.5 |
+
+To regenerate the table on your machine:
+
+```bash
+RUSTFLAGS="-C target-cpu=native" cargo bench --bench simd_comparison -- coding_2bit
+uv run scripts/perf_table.py
+```
+
 ## SIMD Acceleration
 
 The 2-bit `encode` and `decode` are SIMD accelerated via
