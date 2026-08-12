@@ -1,4 +1,6 @@
-use bitnuc::{as_2bit, decode, encode, encode_resize, from_2bit};
+use std::hint::black_box;
+
+use bitnuc::{ambiguous_bases, as_2bit, decode, encode, encode_resize, from_2bit};
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 
 fn generate_sequence(length: usize) -> Vec<u8> {
@@ -72,11 +74,72 @@ fn bench_decoding(c: &mut Criterion) {
     group.finish();
 }
 
+/// Canonical sequence with an `N` every `n_every` bases (0 = fully canonical)
+fn generate_ambiguous_sequence(length: usize, n_every: usize) -> Vec<u8> {
+    let bases = *b"ACGT";
+    (0..length)
+        .map(|i| {
+            if n_every != 0 && i % n_every == n_every - 1 {
+                b'N'
+            } else {
+                bases[i % 4]
+            }
+        })
+        .collect()
+}
+
+/// Scalar baseline for `ambiguous_bases`
+fn ambiguous_bases_scalar(seq: &[u8], pos: &mut Vec<usize>) {
+    for (i, b) in seq.iter().enumerate() {
+        if !matches!(*b | 0x20, b'a' | b'c' | b'g' | b't') {
+            pos.push(i);
+        }
+    }
+}
+
+fn bench_ambiguous(c: &mut Criterion) {
+    let mut group = c.benchmark_group("ambiguous_bases");
+
+    for (label, n_every) in [("0pct", 0), ("1pct", 100), ("25pct", 4)] {
+        for size in [1_000, 100_000] {
+            group.throughput(Throughput::Bytes(size as u64));
+            let seq = generate_ambiguous_sequence(size, n_every);
+            let mut pos = Vec::with_capacity(size);
+
+            group.bench_with_input(
+                BenchmarkId::new(format!("simd_{label}"), size),
+                &seq,
+                |b, seq| {
+                    b.iter(|| {
+                        pos.clear();
+                        ambiguous_bases(seq, &mut pos);
+                        black_box(&pos);
+                    })
+                },
+            );
+            group.bench_with_input(
+                BenchmarkId::new(format!("scalar_{label}"), size),
+                &seq,
+                |b, seq| {
+                    b.iter(|| {
+                        pos.clear();
+                        ambiguous_bases_scalar(seq, &mut pos);
+                        black_box(&pos);
+                    })
+                },
+            );
+        }
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_packing,
     bench_encoding,
     bench_unpacking,
-    bench_decoding
+    bench_decoding,
+    bench_ambiguous
 );
 criterion_main!(benches);
