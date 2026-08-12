@@ -10,12 +10,22 @@ env:
 
 jobs:
   ci:
-    needs: [build, test-matrix, coverage]
+    needs: [style, build, test-matrix, coverage]
     name: CI
     runs-on: "ubuntu-latest"
     steps:
       - name: Done
         run: exit 0
+
+  style:
+    name: Style
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: actions/checkout@v7
+      - name: Formatting
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
   build:
     strategy:
