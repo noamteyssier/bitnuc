@@ -22,7 +22,7 @@ mod testing {
 
     fn generate_sequence(n: usize) -> Vec<u8> {
         let mut rng: SmallRng = make_rng();
-        CHARS.sample(&mut rng, n).copied().collect()
+        (0..n).map(|_| *CHARS.choose(&mut rng).unwrap()).collect()
     }
 
     /// Byte `k` holds bases `4k..4k+4`, base `j` at bits `2*(j % 4)`.
