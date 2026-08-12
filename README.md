@@ -118,6 +118,32 @@ fn main() -> Result<(), bitnuc::BitnucError> {
 }
 ```
 
+## Identifying ambiguous bases
+
+Ambiguous bases (non-`ACGT`) bases are unable to be represented with this two-bit encoding scheme.
+The encoding algorithm also remaps lowercase to upper case (so `acgt` -> `ACGT` internally).
+Use `ambiguous_bases` to track all positions of unrepresentable nucleotides:
+
+```rust
+use bitnuc::ambiguous_bases;
+
+fn main() {
+    let seq = b"ACgTNACYAaTH"; // has unrepresentable bases (N/Y/H)
+
+    let mut pos = Vec::default();
+    ambiguous_bases(seq, &mut pos);
+
+    assert_eq!(
+        pos,
+        vec![4, 7, 11],
+    );
+}
+```
+
+> Note: `ambiguous_bases` only tracks non-`ACGTacgt` bases.
+> It does not identify lowercase letters which are also not representable but
+> which are remapped to their uppercase variants through encoding/decoding.
+
 ## Memory Usage
 
 The 2-bit encoding provides significant memory savings:
