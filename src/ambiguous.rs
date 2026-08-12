@@ -47,10 +47,18 @@ where
 
 #[inline(always)]
 fn write_bitmask(offset: usize, mut bits: u64, pos: &mut Vec<usize>) {
-    while bits != 0 {
-        pos.push(offset + bits.trailing_zeros() as usize);
-        bits &= bits - 1;
+    if bits == 0 {
+        return; // skip popcnt/extend overhead on clean chunks
     }
+    let cnt = bits.count_ones(); // popcnt to get number of elements
+    pos.extend(
+        (0..cnt) // reserve elements upfront
+            .map(|_| {
+                let p = offset + bits.trailing_zeros() as usize;
+                bits &= bits - 1;
+                p
+            }),
+    );
 }
 
 #[inline(always)]
