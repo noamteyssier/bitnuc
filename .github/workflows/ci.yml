@@ -31,24 +31,19 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         build: [debug, release]
-        simd: [enabled, disabled]
         include:
-          - simd: enabled
-            simd_flag: ""
-          - simd: disabled
-            simd_flag: "-F nosimd"
           - build: debug
             build_flag: ""
           - build: release
             build_flag: "--release"
 
-    name: Test ${{ matrix.os }} (${{ matrix.build }}, SIMD ${{ matrix.simd }})
+    name: Test ${{ matrix.os }} ${{ matrix.build }}
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v3
       - name: Run Tests
-        run: cargo test --verbose ${{ matrix.build_flag }} ${{ matrix.simd_flag }}
+        run: cargo test --verbose ${{ matrix.build_flag }}
 
   coverage:
     name: Coverage
