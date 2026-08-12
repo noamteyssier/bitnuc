@@ -4,6 +4,45 @@ use fearless_simd::{Level, Simd, dispatch, prelude::*, u8x16, u32x4, u32x8, u32x
 
 use crate::BitnucError;
 
+/// Two-bit encodes an input sequence into an encoding buffer
+pub fn encode(seq: &[u8], ebuf: &mut [u8]) -> Result<(), BitnucError> {
+    let n_bytes = seq.len().div_ceil(4);
+    if ebuf.len() < n_bytes {
+        return Err(BitnucError::EncodingBufferTooSmall {
+            expected: n_bytes,
+            actual: ebuf.len(),
+        });
+    }
+
+    let level = Level::new();
+    dispatch!(level, simd => encode_inner(simd, seq, ebuf));
+    Ok(())
+}
+
+/// Two-bit encodes an input sequence into an encoding buffer
+/// which can be resized.
+///
+/// Used for passing in a reusable vec across sequences with
+/// different sizes and you don't want to calculate it.
+///
+/// # Safety:
+/// Uses an uninit-value trick internally but it is safe as
+/// values are immediately overwritten and no uninit values
+/// are returned to the user.
+#[allow(clippy::uninit_vec)]
+pub fn encode_resize(seq: &[u8], ebuf: &mut Vec<u8>) {
+    let n_bytes = seq.len().div_ceil(4);
+    if ebuf.len() < n_bytes {
+        ebuf.reserve(n_bytes - ebuf.len());
+        unsafe {
+            ebuf.set_len(n_bytes); // currently uninit values
+        }
+    }
+
+    let level = Level::new();
+    dispatch!(level, simd => encode_inner(simd, seq, &mut ebuf[..n_bytes]));
+}
+
 /// Index = ascii & 6. This table projects back to expected representation.
 ///
 /// | Base | &6 | LUT |
@@ -18,6 +57,52 @@ const ENCODE_LUT: [u8; 16] = [
     0, 0, 1, 0, 3, 0, 2, 0, // idx 0=A, 2=C, 4=T, 6=G
     0, 0, 0, 0, 0, 0, 0, 0,
 ];
+
+#[inline(always)]
+fn encode_inner<S: Simd>(simd: S, seq: &[u8], ebuf: &mut [u8]) {
+    let lut_block = u8x16::from_slice(simd, &ENCODE_LUT);
+    let mut i = 0; // current index in the sequence
+    let mut b = 0; // current byte in the buffer
+
+    // main loop: 64 bases at a time
+    while i + 64 <= seq.len() {
+        pack_lanes::<S, u32x16<S>>(simd, &seq[i..i + 64], lut_block, &mut ebuf[b..b + 16]);
+        i += 64;
+        b += 16;
+    }
+
+    // at most one 32-base step
+    if i + 32 <= seq.len() {
+        pack_lanes::<S, u32x8<S>>(simd, &seq[i..i + 32], lut_block, &mut ebuf[b..b + 8]);
+        i += 32;
+        b += 8;
+    }
+
+    // at most one 16-base step
+    if i + 16 <= seq.len() {
+        pack_lanes::<S, u32x4<S>>(simd, &seq[i..i + 16], lut_block, &mut ebuf[b..b + 4]);
+        i += 16;
+        b += 4;
+    }
+
+    // at most one 8-base step (SWAR keeps the arithmetic hash; tbl has no
+    // scalar equivalent and the tail never dominates)
+    if i + 8 <= seq.len() {
+        pack_8bp_swar(&seq[i..i + 8], &mut ebuf[b..b + 2]);
+        i += 8;
+        b += 2;
+    }
+
+    // scalar tail: <8 remaining bases; these OR into their bytes, so zero
+    // exactly the bytes the tail touches (everything before b is fully written)
+    if i < seq.len() {
+        ebuf[b..seq.len().div_ceil(4)].fill(0);
+        for (j, &base) in seq[i..].iter().enumerate() {
+            let code = ((base >> 1) ^ (base >> 2)) & 3; // (r1^r2)&3
+            ebuf[b + j / 4] |= code << (2 * (j % 4)); // directly place packed code
+        }
+    }
+}
 
 /// `pack_lanes` with table-lookup extraction: `& 6` + one block-local byte
 /// shuffle replace the `((v>>1) ^ (v>>2)) & 3` hash, cutting the extraction
@@ -93,89 +178,4 @@ fn pack_8bp_swar(chunk: &[u8], ebuf: &mut [u8]) {
 
     ebuf[0] = packed as u8; // update first word
     ebuf[1] = (packed >> 32) as u8; // update second word
-}
-
-#[inline(always)]
-fn encode_inner<S: Simd>(simd: S, seq: &[u8], ebuf: &mut [u8]) {
-    let lut_block = u8x16::from_slice(simd, &ENCODE_LUT);
-    let mut i = 0; // current index in the sequence
-    let mut b = 0; // current byte in the buffer
-
-    // main loop: 64 bases at a time
-    while i + 64 <= seq.len() {
-        pack_lanes::<S, u32x16<S>>(simd, &seq[i..i + 64], lut_block, &mut ebuf[b..b + 16]);
-        i += 64;
-        b += 16;
-    }
-
-    // at most one 32-base step
-    if i + 32 <= seq.len() {
-        pack_lanes::<S, u32x8<S>>(simd, &seq[i..i + 32], lut_block, &mut ebuf[b..b + 8]);
-        i += 32;
-        b += 8;
-    }
-
-    // at most one 16-base step
-    if i + 16 <= seq.len() {
-        pack_lanes::<S, u32x4<S>>(simd, &seq[i..i + 16], lut_block, &mut ebuf[b..b + 4]);
-        i += 16;
-        b += 4;
-    }
-
-    // at most one 8-base step (SWAR keeps the arithmetic hash; tbl has no
-    // scalar equivalent and the tail never dominates)
-    if i + 8 <= seq.len() {
-        pack_8bp_swar(&seq[i..i + 8], &mut ebuf[b..b + 2]);
-        i += 8;
-        b += 2;
-    }
-
-    // scalar tail: <8 remaining bases; these OR into their bytes, so zero
-    // exactly the bytes the tail touches (everything before b is fully written)
-    if i < seq.len() {
-        ebuf[b..seq.len().div_ceil(4)].fill(0);
-        for (j, &base) in seq[i..].iter().enumerate() {
-            let code = ((base >> 1) ^ (base >> 2)) & 3; // (r1^r2)&3
-            ebuf[b + j / 4] |= code << (2 * (j % 4)); // directly place packed code
-        }
-    }
-}
-
-/// Two-bit encodes an input sequence into an encoding buffer
-pub fn encode(seq: &[u8], ebuf: &mut [u8]) -> Result<(), BitnucError> {
-    let n_bytes = seq.len().div_ceil(4);
-    if ebuf.len() < n_bytes {
-        return Err(BitnucError::EncodingBufferTooSmall {
-            expected: n_bytes,
-            actual: ebuf.len(),
-        });
-    }
-
-    let level = Level::new();
-    dispatch!(level, simd => encode_inner(simd, seq, ebuf));
-    Ok(())
-}
-
-/// Two-bit encodes an input sequence into an encoding buffer
-/// which can be resized.
-///
-/// Used for passing in a reusable vec across sequences with
-/// different sizes and you don't want to calculate it.
-///
-/// # Safety:
-/// Uses an uninit-value trick internally but it is safe as
-/// values are immediately overwritten and no uninit values
-/// are returned to the user.
-#[allow(clippy::uninit_vec)]
-pub fn encode_resize(seq: &[u8], ebuf: &mut Vec<u8>) {
-    let n_bytes = seq.len().div_ceil(4);
-    if ebuf.len() < n_bytes {
-        ebuf.reserve(n_bytes - ebuf.len());
-        unsafe {
-            ebuf.set_len(n_bytes); // currently uninit values
-        }
-    }
-
-    let level = Level::new();
-    dispatch!(level, simd => encode_inner(simd, seq, &mut ebuf[..n_bytes]));
 }
