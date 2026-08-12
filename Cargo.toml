@@ -2,7 +2,7 @@
 name = "bitnuc"
 version = "0.5.0-dev"
 edition = "2024"
-authors = ["Noam Teyssier <noam.teyssier@arcinstitute.org"]
+authors = ["Noam Teyssier"]
 repository = "https://github.com/noamteyssier/bitnuc"
 documentation = "https://docs.rs/bitnuc"
 description = "A library for efficient nucleotide sequence manipulation using 2-bit encoding"
@@ -20,7 +20,7 @@ codegen-units = 1
 
 [dev-dependencies]
 criterion = "0.5.1"
-rand = "0.10.2"
+rand = { version = "0.10.2", default-features = false, features = ["sys_rng"] }
 
 [[bench]]
 name = "simd_comparison"
