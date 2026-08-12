@@ -9,115 +9,111 @@ A library for efficient nucleotide sequence manipulation using 2-bit encoding.
 
 ## Features
 
-- 2-bit nucleotide encoding (A=00, C=01, G=10, T=11)
-- 4-bit nucleotide encoding (A=0000, C=0001, G=0010, T=0011, N=1111)
-- Direct bit manipulation functions for custom implementations
-- Higher-level sequence type with additional analysis features
+- 2-bit nucleotide encoding (A=00, C=01, G=10, T=11) with a SIMD
+  implementation dispatched at runtime via
+  [`fearless_simd`](https://docs.rs/fearless_simd)
+- A little-endian-pinned `u64` kmer boundary (`as_2bit` / `from_2bit`) for
+  hashing and fixed-width integer storage of sequences up to 32 bases
 
-## Low-Level Packing Functions
+## Encoded Format
 
-For direct bit manipulation, use the `as_2bit` and `from_2bit` functions:
+Sequences encode to plain bytes: byte `k` holds bases `4k..4k+4`, base `j` at
+bits `2*(j % 4)` of its byte. A sequence of `n` bases occupies exactly
+`n.div_ceil(4)` bytes and trailing pad bits are always zero.
+
+```text
+Input Sequence: [A][C][G][T]
+Output Buffer: [11 10 01 00]
+
+[]: byte boundary
+Bit pairs are MSB-first: base j occupies bits 2j..2j+1,
+so the first base is the rightmost pair (A=00).
+```
+
+> Note: Encoding is lossy for bytes outside `ACGTacgt`: invalid bases map to an unspecified code rather than an error. If you need to preserve ambiguous bases, detect and track them separately.
+
+## Encoding and Decoding
+
+The core functions operate on byte slices, with `_resize` variants that
+manage the buffer length for you:
 
 ```rust
-use bitnuc::{as_2bit, from_2bit};
+use bitnuc::{encode_resize, decode_resize};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Pack a sequence into a u64
-    let packed = as_2bit(b"ACGT")?;
-    assert_eq!(packed, 0b11100100);
+fn main() -> Result<(), bitnuc::BitnucError> {
+    let seq = b"ACGTACGTAC"; // 10 bases -> 3 encoded bytes
 
-    // Unpack back to a sequence
-    let mut unpacked = Vec::new(); // Allocate a reusable buffer
-    from_2bit(packed, 4, &mut unpacked)?;
-    assert_eq!(&unpacked, b"ACGT");
-    unpacked.clear(); // Reuse the buffer
+    let mut ebuf = Vec::new();
+    encode_resize(seq, &mut ebuf);
+    assert_eq!(ebuf.len(), 3);
+
+    let mut dbuf = Vec::new();
+    decode_resize(&ebuf, seq.len(), &mut dbuf)?;
+    assert_eq!(&dbuf, seq);
     Ok(())
 }
 ```
 
-These functions are useful when you need to:
-
-- Implement custom sequence storage
-- Manipulate sequences at the bit level
-- Integrate with other bioinformatics tools
-- Copy sequences more efficiently
-- Hash sequences more efficiently
-
-For example, packing multiple short sequences:
-
-```rust
-use bitnuc::{as_2bit, from_2bit};
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Pack multiple 4-mers into u64s
-    let kmers = [b"ACGT", b"TGCA", b"GGCC"];
-    let packed: Vec<u64> = kmers
-        .into_iter()
-        .map(|kmer| as_2bit(kmer))
-        .collect::<Result<_, _>>()?;
-
-    // Unpack when needed
-    let mut kmers = Vec::new();
-    from_2bit(packed[0], 4, &mut kmers)?;
-    assert_eq!(&kmers, b"ACGT");
-    Ok(())
-}
-```
-
-## Mid-Level Encoding Functions
-
-For more control over encoding and decoding, use the `encode` and `decode` functions:
-
-These will handle sequences of any length, padding the last u64 with zeros if needed.
-
-We'll use the [`nucgen`](https://crates.io/crates/nucgen) crate to generate random sequences for testing:
+The slice-based variants write into caller-provided buffers, which lets
+consumers control allocation and padding (e.g. file formats that pad encoded
+sequences to 8-byte words):
 
 ```rust
 use bitnuc::{encode, decode};
-use nucgen::Sequence;
 
-let mut rng = rand::thread_rng();
-let mut seq = Sequence::new();
-let seq_len = 1000;
+fn main() -> Result<(), bitnuc::BitnucError> {
+    let seq = b"ACGTACGTAC";
 
-// Generate a random sequence
-seq.fill_buffer(&mut rng, seq_len);
+    // Pad the encoded buffer to an 8-byte multiple: the layout is identical
+    // to the legacy u64 packing serialized little-endian
+    let mut ebuf = vec![0u8; seq.len().div_ceil(4).next_multiple_of(8)];
+    encode(seq, &mut ebuf)?;
 
-// Encode the sequence
-let mut ebuf = Vec::new(); // Buffer for encoded sequence
-encode(seq.bytes(), &mut ebuf);
-
-// Decode the sequence
-let mut dbuf = Vec::new(); // Buffer for decoded sequence
-decode(&ebuf, seq_len, &mut dbuf);
-
-// Check that the decoded sequence matches the original
-assert_eq!(seq.bytes(), &dbuf);
+    let mut dbuf = vec![0u8; seq.len()];
+    decode(&ebuf, seq.len(), &mut dbuf)?;
+    assert_eq!(&dbuf, seq);
+    Ok(())
+}
 ```
 
-Note that the `encode` function will always encode a full u64.
-If you have a sequence that is not a multiple of 32 bases, the final u64 will be backed up to the remainder,
-and the rest of the bits will be set to zero.
+## u64 Kmer Packing
 
-Decoding will ignore these zero bits and return the original sequence.
+For hashing and fixed-width storage of short sequences (barcodes, UMIs,
+k-mers up to 32 bases), `as_2bit` and `from_2bit` pack to and from a `u64`.
 
-## High-Level Sequence Type
-
-For more complex sequence manipulation, use the [`PackedSequence`] type:
+> Note: These are pinned to **little-endian** internally.
 
 ```rust
-use bitnuc::{PackedSequence, GCContent, BaseCount};
+use bitnuc::{as_2bit, from_2bit};
+use std::collections::HashMap;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let seq = PackedSequence::new(b"ACGTACGT")?;
+fn main() -> Result<(), bitnuc::BitnucError> {
+    let packed = as_2bit(b"ACGT")?;
+    assert_eq!(packed, 0b11100100);
 
-    // Sequence analysis
-    println!("GC Content: {}%", seq.gc_content());
-    let [a_count, c_count, g_count, t_count] = seq.base_counts();
+    // Efficient k-mer counting
+    let mut kmer_counts = HashMap::new();
+    for window in b"ACGTACGT".windows(4) {
+        *kmer_counts.entry(as_2bit(window)?).or_insert(0) += 1;
+    }
+    assert_eq!(kmer_counts.get(&packed), Some(&2));
 
-    // Slicing
-    let subseq = seq.slice(1..5)?;
-    assert_eq!(&subseq, b"CGTA");
+    // Unpacking returns a stack array of all 32 bases; slice to your length
+    let unpacked = from_2bit(packed);
+    assert_eq!(&unpacked[..4], b"ACGT");
+    Ok(())
+}
+```
+
+Packed kmers can be compared with `hdist_scalar`:
+
+```rust
+use bitnuc::{as_2bit, hdist_scalar};
+
+fn main() -> Result<(), bitnuc::BitnucError> {
+    let u = as_2bit(b"ACGT")?;
+    let v = as_2bit(b"ACGA")?;
+    assert_eq!(hdist_scalar(u, v, 4)?, 1);
     Ok(())
 }
 ```
@@ -131,43 +127,31 @@ Standard encoding: 1 byte per base
 ACGT = 4 bytes = 32 bits
 
 2-bit encoding: 2 bits per base
-ACGT = 8 bits
+ACGT = 1 byte = 8 bits
 ```
 
-This means you can store 4 times as many sequences in the same amount of memory.
+## Performance
 
-## Error Handling
+Throughput by sequence length, measured on an Apple M3 Pro with
+`target-cpu=native` (criterion mean, 1 byte per base):
 
-All operations that could fail return a [`Result`] with [`Error`]:
+|     bp | encode (GB/s) | decode (GB/s) |
+| -----: | ------------: | ------------: |
+|     10 |           2.3 |           2.2 |
+|    100 |          12.5 |          13.8 |
+|   1000 |          35.4 |          29.7 |
+|  10000 |          38.2 |          34.0 |
+| 100000 |          38.6 |          33.5 |
 
-```rust
-use bitnuc::{as_2bit, Error};
+To regenerate the table on your machine:
 
-// Invalid nucleotide
-let err = as_2bit(b"ACGN").unwrap_err();
-assert!(matches!(err, Error::InvalidBase(b'N')));
-
-// Sequence too long
-let long_seq = vec![b'A'; 33];
-let err = as_2bit(&long_seq).unwrap_err();
-assert!(matches!(err, Error::SequenceTooLong(33)));
+```bash
+RUSTFLAGS="-C target-cpu=native" cargo bench --bench simd_comparison -- coding_2bit
+uv run scripts/perf_table.py
 ```
 
 ## SIMD Acceleration
 
-`as_2bit`, `from_2bit`, `as_4bit`, `from_4bit`, and both twobit and fourbit `encode`, and `decode` are optionally SIMD accelerated depending on the architecture of your system.
-By default, SIMD instructions are used, but they can be shut-off using the `nosimd` feature flag.
-
-For increased performance and to really take advantage of the SIMD I recommend compiling with:
-
-```bash
-RUSTFLAGS="-C target-cpu=native"
-```
-
-or to add these flags to your project via the cargo build config:
-
-```toml
-# ./cargo/config.toml
-[build]
-rustflags = ["-C", "target-cpu=native"]
-```
+The 2-bit `encode` and `decode` are SIMD accelerated via
+[`fearless_simd`](https://docs.rs/fearless_simd), with the instruction set
+(NEON, SSE, AVX2, AVX-512) selected at runtime.

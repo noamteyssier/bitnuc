@@ -1,6 +1,9 @@
 name: Rust
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
 
 env:
   CARGO_TERM_COLOR: always
@@ -22,7 +25,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Build
         run: cargo build --verbose
 
@@ -31,30 +34,25 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         build: [debug, release]
-        simd: [enabled, disabled]
         include:
-          - simd: enabled
-            simd_flag: ""
-          - simd: disabled
-            simd_flag: "-F nosimd"
           - build: debug
             build_flag: ""
           - build: release
             build_flag: "--release"
 
-    name: Test ${{ matrix.os }} (${{ matrix.build }}, SIMD ${{ matrix.simd }})
+    name: Test ${{ matrix.os }} ${{ matrix.build }}
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Run Tests
-        run: cargo test --verbose ${{ matrix.build_flag }} ${{ matrix.simd_flag }}
+        run: cargo test --verbose ${{ matrix.build_flag }}
 
   coverage:
     name: Coverage
     runs-on: "ubuntu-latest"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Install LLVM-Coverage
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Measure Coverage
