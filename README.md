@@ -30,7 +30,7 @@ Bit pairs are MSB-first: base j occupies bits 2j..2j+1,
 so the first base is the rightmost pair (A=00).
 ```
 
-> Note: Encoding is lossy for bytes outside `ACGTacgt`: invalid bases map to an unspecified code rather than an error. If you need to preserve ambiguous bases, detect and track them separately.
+> Note: Encoding is lossy for bytes outside `ACGTacgt`: invalid bases map to an unspecified code rather than an error. If you need to preserve ambiguous bases, detect and track them separately (see `ambiguous_bases`).
 
 ## Encoding and Decoding
 
