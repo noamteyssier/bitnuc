@@ -122,7 +122,8 @@ fn main() -> Result<(), bitnuc::BitnucError> {
 
 Ambiguous bases (non-`ACGT`) bases are unable to be represented with this two-bit encoding scheme.
 The encoding algorithm also remaps lowercase to upper case (so `acgt` -> `ACGT` internally).
-Use `ambiguous_bases` to track all positions of unrepresentable nucleotides:
+Use `ambiguous_bases` to track all positions of unrepresentable nucleotides.
+The position buffer is generic over its element type (`usize`, `u64`, or `u32`):
 
 ```rust
 use bitnuc::ambiguous_bases;
@@ -130,7 +131,7 @@ use bitnuc::ambiguous_bases;
 fn main() {
     let seq = b"ACgTNACYAaTH"; // has unrepresentable bases (N/Y/H)
 
-    let mut pos = Vec::default();
+    let mut pos: Vec<usize> = Vec::default();
     ambiguous_bases(seq, &mut pos);
 
     assert_eq!(

@@ -7,7 +7,7 @@ mod error;
 mod hamming;
 mod kmer;
 
-pub use ambiguous::ambiguous_bases;
+pub use ambiguous::{Pos, ambiguous_bases};
 pub use decode::{decode, decode_resize};
 pub use encode::{encode, encode_resize};
 pub use error::BitnucError;
