@@ -123,15 +123,12 @@ fn decode_inner<S: Simd>(simd: S, ebuf: &[u8], n: usize, seq: &mut [u8]) {
     }
 }
 
-/// Decodes `P::N` packed bytes into `P::N * 4` ASCII bases, generic over the
-/// byte vector width: the mirror of `pack_lanes`. Two rounds of `widen` (one
-/// register in, two out — narrow's inverse) put each packed byte alone in a
-/// u32 lane; each quarter then spreads and table-looks-up back to ASCII.
+/// Inverse of `pack_lanes` done generically over the u32 vector width.
 ///
-/// `Q` is the twice-widened u32 vector. Naming it as a parameter (pinned by
-/// the `Widened = Q` equality) keeps the bounds readable, and `ByteVector = P`
-/// tells the compiler that spreading a quarter yields `P` again, so its full
-/// `P::N` bytes store straight into `out`.
+/// - Widen the packed bytes back into u32
+/// - For each quarter of the widened vector:
+///     - Run the shift + OR cascade backwards
+///     - Match back to ASCII bases using the LUT
 #[inline(always)]
 fn unpack_lanes<S, P, Q>(simd: S, chunk: &[u8], lut_block: u8x16<S>, out: &mut [u8])
 where
