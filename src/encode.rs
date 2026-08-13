@@ -104,12 +104,6 @@ fn encode_inner<S: Simd>(simd: S, seq: &[u8], ebuf: &mut [u8]) {
     }
 }
 
-/// `pack_lanes` with table-lookup extraction: `& 6` + one block-local byte
-/// shuffle replace the `((v>>1) ^ (v>>2)) & 3` hash, cutting the extraction
-/// from 4 vector ops to 2 (the trick packed-seq gets for free from its
-/// bits-in-place mapping, recovered here for our mapping via the LUT). The
-/// tbl output is already exact 2-bit codes, so the cascade needs no mask.
-///
 /// Pack lanes with table-lookup extraction:
 ///
 /// - Project to SIMD
