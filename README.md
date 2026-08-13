@@ -7,13 +7,16 @@
 
 A library for efficient nucleotide sequence manipulation using 2-bit encoding.
 
-## Features
+## Summary
 
-- 2-bit nucleotide encoding (A=00, C=01, G=10, T=11) with a SIMD
-  implementation dispatched at runtime via
-  [`fearless_simd`](https://docs.rs/fearless_simd)
-- A little-endian-pinned `u64` kmer boundary (`as_2bit` / `from_2bit`) for
-  hashing and fixed-width integer storage of sequences up to 32 bases
+This a SIMD-accelerated two-bit encoding library for nucleotide sequences.
+It is meant to have fast encode/decode routines for small and large sequences and to provide a fairly unstructured interface for working with nucleotide sequences in memory.
+
+It provides:
+
+- 2-bit nucleotide encoding (A=00, C=01, G=10, T=11) with SIMD dispatched at runtime via [`fearless_simd`](https://docs.rs/fearless_simd)
+- A little-endian-pinned `u64` kmer boundary (`as_2bit` / `from_2bit`) for hashing and fixed-width integer storage of sequences up to 32 bases
+- Ambiguous base detection (`ambiguous_bases`) for tracking non-`ACGTacgt` bases
 
 ## Encoded Format
 
@@ -182,3 +185,11 @@ uv run scripts/perf_table.py
 The 2-bit `encode` and `decode` are SIMD accelerated via
 [`fearless_simd`](https://docs.rs/fearless_simd), with the instruction set
 (NEON, SSE, AVX2, AVX-512) selected at runtime.
+
+## Related Work
+
+I highly recommend checking out [packed-seq](https://github.com/rust-seq/packed-seq).
+They are currently the highest performance 2-bit encoding library in Rust as far as I can tell.
+They follow a different bit-packing scheme than this library and they can shave off a few instructions in their SIMD routines.
+
+If you're interested in 2-bit encoding in general make sure to check out [cute-nucleotides](https://github.com/Daniel-Liu-c0deb0t/cute-nucleotides) which has an excellent overview of different algorithms and their performance characteristics.
