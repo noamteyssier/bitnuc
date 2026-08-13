@@ -1,314 +1,198 @@
-//! # bitnuc
-//!
-//! A library for efficient nucleotide sequence manipulation using 2-bit encoding.
-//!
-//! ## Features
-//!
-//! - 2-bit nucleotide encoding (A=00, C=01, G=10, T=11)
-//! - 4-bit nucleotide encoding (A=0000, C=0001, G=0010, T=0011, N=1111)
-//! - Direct bit manipulation functions for custom implementations
-//! - Higher-level sequence type with additional analysis features
-//!
-//! ## Low-Level Packing Functions
-//!
-//! For direct bit manipulation, use the `as_2bit` and `from_2bit` functions:
-//!
-//! ```rust
-//! use bitnuc::{as_2bit, from_2bit, from_2bit_alloc};
-//!
-//! fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Pack a sequence into a u64
-//!     let packed = as_2bit(b"ACGT")?;
-//!     assert_eq!(packed, 0b11100100);
-//!
-//!     // Unpack back to a sequence using a reusable buffer
-//!     let mut unpacked = Vec::new();
-//!     from_2bit(packed, 4, &mut unpacked)?;
-//!     assert_eq!(&unpacked, b"ACGT");
-//!     unpacked.clear();
-//!
-//!     // Unpack back to a sequence with a reallocation
-//!     let unpacked = from_2bit_alloc(packed, 4)?;
-//!     assert_eq!(&unpacked, b"ACGT");
-//!
-//!     Ok(())
-//! }
-//! ```
-//!
-//! These functions are useful when you need to:
-//! - Implement custom sequence storage
-//! - Manipulate sequences at the bit level
-//! - Integrate with other bioinformatics tools
-//! - Copy sequences more efficiently
-//! - Hash sequences more efficiently
-//!
-//! For example, packing multiple short sequences:
-//!
-//! ```rust
-//! use bitnuc::{as_2bit, from_2bit};
-//!
-//! fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Pack multiple 4-mers into u64s
-//!     let kmers = [b"ACGT", b"TGCA", b"GGCC"];
-//!     let packed: Vec<u64> = kmers
-//!         .into_iter()
-//!         .map(|kmer| as_2bit(kmer))
-//!         .collect::<Result<_, _>>()?;
-//!
-//!     // Unpack when needed
-//!     let mut unpacked = Vec::new();
-//!     from_2bit(packed[0], 4, &mut unpacked)?;
-//!     assert_eq!(&unpacked, b"ACGT");
-//!     Ok(())
-//! }
-//! ```
-//!
-//! ## Mid-Level Encoding Functions
-//!
-//! For more control over encoding and decoding, use the `encode` and `decode` functions:
-//!
-//! These will handle sequences of any length, padding the last u64 with zeros if needed.
-//!
-//! We'll use the [`nucgen`](https://crates.io/crates/nucgen) crate to generate random sequences for testing:
-//!
-//! ```rust
-//! use bitnuc::twobit::{encode, decode};
-//! use nucgen::Sequence;
-//!
-//! let mut rng = rand::thread_rng();
-//! let mut seq = Sequence::new();
-//! let seq_len = 1000;
-//!
-//! // Generate a random sequence
-//! seq.fill_buffer(&mut rng, seq_len);
-//!
-//! // Encode the sequence
-//! let mut ebuf = Vec::new(); // Buffer for encoded sequence
-//! encode(seq.bytes(), &mut ebuf);
-//!
-//! // Decode the sequence
-//! let mut dbuf = Vec::new(); // Buffer for decoded sequence
-//! decode(&ebuf, seq_len, &mut dbuf);
-//!
-//! // Check that the decoded sequence matches the original
-//! assert_eq!(seq.bytes(), &dbuf);
-//! ```
-//!
-//! Note that the `encode` function will always encode a full u64.
-//! If you have a sequence that is not a multiple of 32 bases, the final u64 will be backed up to the remainder,
-//! and the rest of the bits will be set to zero.
-//!
-//! Decoding will ignore these zero bits and return the original sequence.
-//!
-//!
-//! ## High-Level Sequence Type
-//!
-//! For more complex sequence manipulation, use the [`BitNuc`] type:
-//!
-//! ```rust
-//! use bitnuc::BitNuc;
-//!
-//! fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let seq: &[u8] = b"ACGTACGT";
-//!     let mut packed = BitNuc::new_2bit();
-//!     packed.fill(seq);
-//!
-//!     let mut dbuf = Vec::new(); // Buffer for decoded sequence
-//!     packed.decode_into(&mut dbuf);
-//!
-//!     // Check that the decoded sequence matches the original
-//!     assert_eq!(seq, &dbuf);
-//!
-//!     Ok(())
-//! }
-//! ```
-//!
-//! ## Memory Usage
-//!
-//! The 2-bit encoding provides significant memory savings:
-//!
-//! ```text
-//! Standard encoding: 1 byte per base
-//! ACGT = 4 bytes = 32 bits
-//!
-//! 2-bit encoding: 2 bits per base
-//! ACGT = 8 bits
-//! ```
-//!
-//! This means you can store 4 times as many sequences in the same amount of memory.
-//!
-//! ## Error Handling
-//!
-//! All operations that could fail return a [`Result`] with [`Error`]:
-//!
-//! ```rust
-//! use bitnuc::{as_2bit, Error};
-//!
-//! // Invalid nucleotide
-//! let err = as_2bit(b"ACGN").unwrap_err();
-//! assert!(matches!(err, Error::InvalidBase(b'N')));
-//!
-//! // Sequence too long
-//! let long_seq = vec![b'A'; 33];
-//! let err = as_2bit(&long_seq).unwrap_err();
-//! assert!(matches!(err, Error::SequenceTooLong(33)));
-//! ```
-//!
-//! ## Performance Considerations
-//!
-//! When working with many short sequences (like k-mers), using `as_2bit` and `from_2bit`
-//! directly can be more efficient than creating [`BitNuc`] instances:
-//!
-//! ```rust
-//! use bitnuc::{as_2bit, from_2bit};
-//! use std::collections::HashMap;
-//!
-//! fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Efficient k-mer counting
-//!     let mut kmer_counts = HashMap::new();
-//!
-//!     // Pack k-mers directly into u64s
-//!     let sequence = b"ACGTACGT";
-//!     for window in sequence.windows(4) {
-//!         let packed = as_2bit(window)?;
-//!         *kmer_counts.entry(packed).or_insert(0) += 1;
-//!     }
-//!
-//!     // Count of "ACGT"
-//!     let acgt_packed = as_2bit(b"ACGT")?;
-//!     assert_eq!(kmer_counts.get(&acgt_packed), Some(&2));
-//!     Ok(())
-//! }
-//! ```
-//!
-//! If you are unpacking many sequences, consider reusing a buffer to avoid reallocations:
-//!
-//! ```rust
-//! use bitnuc::{as_2bit, from_2bit};
-//!
-//! fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!
-//!     // Pack a sequence
-//!     let packed = as_2bit(b"ACGT")?;
-//!
-//!     // Reusable buffer for unpacking
-//!     let mut unpacked = Vec::new();
-//!     from_2bit(packed, 4, &mut unpacked)?;
-//!     assert_eq!(&unpacked, b"ACGT");
-//!     unpacked.clear();
-//!
-//!     // Pack another sequence
-//!     let packed = as_2bit(b"TGCA")?;
-//!     from_2bit(packed, 4, &mut unpacked)?;
-//!     assert_eq!(&unpacked, b"TGCA");
-//!     Ok(())
-//! }
-//! ```
-//!
-//!
-//! See the documentation for [`as_2bit`] and [`from_2bit`] for more details on
-//! working with packed sequences directly.
+#![doc = include_str!("../README.md")]
 
+mod ambiguous;
+mod decode;
+mod encode;
 mod error;
-pub mod fourbit;
-pub mod twobit;
-mod types;
+mod hamming;
+mod kmer;
 
-pub use error::Error;
-pub use types::{BitNuc, BitSize};
-
-pub use fourbit::{as_4bit, from_4bit, from_4bit_alloc};
-pub use twobit::{as_2bit, as_2bit_lossy, from_2bit, from_2bit_alloc};
+pub use ambiguous::{Pos, ambiguous_bases};
+pub use decode::{decode, decode_resize};
+pub use encode::{encode, encode_resize};
+pub use error::BitnucError;
+pub use hamming::hdist_scalar;
+pub use kmer::{as_2bit, from_2bit};
 
 #[cfg(test)]
 mod testing {
-    use crate::BitNuc;
+    use rand::{make_rng, rngs::SmallRng, seq::IndexedRandom};
 
+    use crate::{BitnucError, as_2bit, from_2bit, *};
+
+    const CHARS: [u8; 4] = *b"ACGT";
+
+    fn generate_sequence(n: usize) -> Vec<u8> {
+        let mut rng: SmallRng = make_rng();
+        (0..n).map(|_| *CHARS.choose(&mut rng).unwrap()).collect()
+    }
+
+    /// Byte `k` holds bases `4k..4k+4`, base `j` at bits `2*(j % 4)`.
     #[test]
-    fn test_sequence_creation_2bit() {
-        let seq = b"ACGTACGT";
-        let mut packed = BitNuc::new_2bit();
+    fn golden_byte_layout() {
+        let mut ebuf = Vec::new();
 
-        // Pack the sequence
-        packed.fill(seq).unwrap();
+        // A=00, C=01, G=10, T=11 packed LSB-first within the byte
+        encode_resize(b"ACGT", &mut ebuf);
+        assert_eq!(ebuf, [0b11100100]);
 
-        // Test basic properties
-        assert_eq!(seq.len(), 8);
+        encode_resize(b"TGCA", &mut ebuf);
+        assert_eq!(ebuf, [0b00011011]);
 
-        // Test decoding
-        let decoded = packed.decode_alloc().unwrap();
-        assert_eq!(&decoded, seq);
+        // Second byte holds bases 4..8
+        encode_resize(b"AAAATGCA", &mut ebuf);
+        assert_eq!(ebuf, [0b00000000, 0b00011011]);
+    }
+
+    /// Unused bits of a trailing partial byte are always zero.
+    #[test]
+    fn golden_partial_byte_padding() {
+        let mut ebuf = Vec::new();
+
+        encode_resize(b"TTTTT", &mut ebuf);
+        assert_eq!(ebuf, [0xFF, 0b00000011]);
+
+        // Padding is deterministic even when the buffer held stale data
+        let mut ebuf = vec![0xFFu8; 2];
+        encode(b"TTTTT", &mut ebuf).unwrap();
+        assert_eq!(ebuf, [0xFF, 0b00000011]);
     }
 
     #[test]
-    fn test_sequence_replacement_2bit() {
-        let seq_a = b"ACGT";
-        let seq_b = b"TGCA";
+    fn lowercase_matches_uppercase() {
+        let mut upper = Vec::new();
+        let mut lower = Vec::new();
+        encode_resize(b"ACGTACGTACGTACGTACGTACGTACGTACGTACGT", &mut upper);
+        encode_resize(b"acgtacgtacgtacgtacgtacgtacgtacgtacgt", &mut lower);
+        assert_eq!(upper, lower);
+    }
 
-        let mut packed = BitNuc::new_2bit();
+    /// Exercises every dispatch path: 64-base blocks, the 32/16/8-base steps,
+    /// and the scalar tail.
+    #[test]
+    fn roundtrip_all_lengths() {
+        let mut ebuf = Vec::new();
+        let mut dbuf = Vec::new();
 
-        // Pack sequence A
-        packed.fill(seq_a).unwrap();
+        for len in 0..=1025 {
+            let seq = generate_sequence(len);
 
-        // Test basic properties
-        assert_eq!(seq_a.len(), 4);
+            encode_resize(&seq, &mut ebuf);
+            assert_eq!(ebuf.len(), len.div_ceil(4));
 
-        // Test decoding
-        let decoded = packed.decode_alloc().unwrap();
-        assert_eq!(&decoded, seq_a);
+            decode_resize(&ebuf, len, &mut dbuf).unwrap();
+            assert_eq!(&dbuf[..len], &seq, "roundtrip failed at len {len}");
+        }
+    }
 
-        // Replace with sequence B
-        packed.fill(seq_b).unwrap();
+    /// `as_2bit` is exactly the little-endian interpretation of the byte
+    /// encoding — the only place the u64 boundary is crossed.
+    #[test]
+    fn kmer_is_le_view_of_bytes() {
+        let mut ebuf = Vec::new();
 
-        // Test basic properties
-        assert_eq!(seq_b.len(), 4);
+        for len in 0..=32 {
+            let seq = generate_sequence(len);
 
-        // Test decoding
-        let decoded = packed.decode_alloc().unwrap();
-        assert_eq!(&decoded, seq_b);
+            let packed = as_2bit(&seq).unwrap();
+
+            encode_resize(&seq, &mut ebuf);
+            let mut word = [0u8; 8];
+            word[..ebuf.len()].copy_from_slice(&ebuf);
+            assert_eq!(packed, u64::from_le_bytes(word), "mismatch at len {len}");
+        }
+    }
+
+    /// Golden values from the 0.4.x u64 packing (base `i` at bits `2i`).
+    #[test]
+    fn kmer_golden_values() {
+        assert_eq!(as_2bit(b"ACGT").unwrap(), 0b11100100);
+        assert_eq!(as_2bit(b"A").unwrap(), 0);
+        assert_eq!(as_2bit(b"T").unwrap(), 0b11);
+        assert_eq!(
+            as_2bit(b"TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT").unwrap(),
+            u64::MAX
+        );
+        // High bits beyond the sequence are zero
+        assert_eq!(as_2bit(b"TTTT").unwrap(), 0xFF);
+    }
+
+    /// The whole-buffer encoding padded to 8-byte words matches the legacy
+    /// one-u64-per-32-bases packing serialized little-endian (bq compatibility).
+    #[test]
+    fn padded_bytes_match_legacy_word_stream() {
+        let mut ebuf = Vec::new();
+
+        for len in [1, 31, 32, 33, 64, 100, 129] {
+            let seq = generate_sequence(len);
+
+            // New path, padded to whole words
+            encode_resize(&seq, &mut ebuf);
+            ebuf.resize(ebuf.len().next_multiple_of(8), 0);
+
+            // Legacy path: one u64 per 32 bases, written little-endian
+            let legacy: Vec<u8> = seq
+                .chunks(32)
+                .flat_map(|chunk| as_2bit(chunk).unwrap().to_le_bytes())
+                .collect();
+
+            assert_eq!(ebuf, legacy, "word-stream mismatch at len {len}");
+        }
+    }
+
+    /// `from_2bit` decodes the full kmer; positions past the packed sequence
+    /// are `b'A'` for values produced by `as_2bit`.
+    #[test]
+    fn from_2bit_stack_array() {
+        let packed = as_2bit(b"TGCA").unwrap();
+        let unpacked = from_2bit(packed);
+        assert_eq!(&unpacked[..4], b"TGCA");
+        assert_eq!(&unpacked[4..], [b'A'; 28]);
     }
 
     #[test]
-    fn test_sequence_creation_4bit() {
-        let seq = b"ACGTACGT";
-        let mut packed = BitNuc::new_4bit();
-
-        // Pack the sequence
-        packed.fill(seq).unwrap();
-
-        // Test basic properties
-        assert_eq!(seq.len(), 8);
-
-        // Test decoding
-        let decoded = packed.decode_alloc().unwrap();
-        assert_eq!(&decoded, seq);
+    fn from_2bit_partial() {
+        let packed = as_2bit(b"ACGT").unwrap();
+        assert_eq!(&from_2bit(packed)[..2], b"AC");
+        assert_eq!(&from_2bit(packed)[..3], b"ACG");
     }
 
     #[test]
-    fn test_sequence_replacement_4bit() {
-        let seq_a = b"ACGT";
-        let seq_b = b"TGCA";
+    fn kmer_errors() {
+        let long = vec![b'A'; 33];
+        assert!(matches!(
+            as_2bit(&long).unwrap_err(),
+            BitnucError::SequenceTooLong(33)
+        ));
+    }
 
-        let mut packed = BitNuc::new_4bit();
+    #[test]
+    fn buffer_size_errors() {
+        let mut small = [0u8; 1];
+        assert!(matches!(
+            encode(b"ACGTA", &mut small).unwrap_err(),
+            BitnucError::EncodingBufferTooSmall {
+                expected: 2,
+                actual: 1
+            }
+        ));
 
-        // Pack sequence A
-        packed.fill(seq_a).unwrap();
-
-        // Test basic properties
-        assert_eq!(seq_a.len(), 4);
-
-        // Test decoding
-        let decoded = packed.decode_alloc().unwrap();
-        assert_eq!(&decoded, seq_a);
-
-        // Replace with sequence B
-        packed.fill(seq_b).unwrap();
-
-        // Test basic properties
-        assert_eq!(seq_b.len(), 4);
-
-        // Test decoding
-        let decoded = packed.decode_alloc().unwrap();
-        assert_eq!(&decoded, seq_b);
+        let ebuf = [0u8; 1];
+        let mut out = [0u8; 2];
+        assert!(matches!(
+            decode(&ebuf, 4, &mut out).unwrap_err(),
+            BitnucError::DecodingBufferTooSmall {
+                expected: 4,
+                actual: 2
+            }
+        ));
+        let mut out = [0u8; 8];
+        assert!(matches!(
+            decode(&ebuf, 8, &mut out).unwrap_err(),
+            BitnucError::EncodingBufferTooSmall {
+                expected: 2,
+                actual: 1
+            }
+        ));
     }
 }
