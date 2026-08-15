@@ -78,17 +78,18 @@ fn extract_inner<S: Simd>(simd: S, packed: &[u8], range: Range<usize>, into: &mu
         into[..packed_subset.len()].copy_from_slice(packed_subset);
     } else {
         let mut idx = 0;
-        while idx + 64 + 1 <= into.len() {
+
+        while idx + 65 <= into.len() {
             extract_lanes::<S, u8x64<S>>(simd, packed_subset, offbit, idx, 64, into);
             idx += 64;
         }
 
-        if idx + 32 + 1 <= into.len() {
+        if idx + 33 <= into.len() {
             extract_lanes::<S, u8x32<S>>(simd, packed_subset, offbit, idx, 32, into);
             idx += 32;
         }
 
-        if idx + 16 + 1 <= into.len() {
+        if idx + 17 <= into.len() {
             extract_lanes::<S, u8x16<S>>(simd, packed_subset, offbit, idx, 16, into);
             idx += 16;
         }
@@ -117,6 +118,8 @@ fn extract_inner<S: Simd>(simd: S, packed: &[u8], range: Range<usize>, into: &mu
 /// `offset` is the offset into `packed` to start extracting from.
 /// `size` is the number of packed bytes to extract.
 /// `into` is the output buffer.
+///
+/// Note: `packed` must be at least `offset + size + 1` bytes long.
 #[inline(always)]
 fn extract_lanes<S, V>(
     simd: S,
