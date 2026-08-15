@@ -17,6 +17,7 @@ It provides:
 - 2-bit nucleotide encoding (A=00, C=01, G=10, T=11) with SIMD dispatched at runtime via [`fearless_simd`](https://docs.rs/fearless_simd)
 - A little-endian-pinned `u64` kmer boundary (`as_2bit` / `from_2bit`) for hashing and fixed-width integer storage of sequences up to 32 bases
 - Ambiguous base detection (`ambiguous_bases`) for tracking non-`ACGTacgt` bases
+- Extraction routines for extracting aligned and unaligned ranges from packed sequences
 
 ## Encoded Format
 
@@ -147,6 +148,40 @@ fn main() {
 > Note: `ambiguous_bases` only tracks non-`ACGTacgt` bases.
 > It does not identify lowercase letters which are also not representable but
 > which are remapped to their uppercase variants through encoding/decoding.
+
+## Extraction
+
+It is oftentimes useful to extract subsequences from packed sequences, e.g. for hashing or extracting ranges. 
+Use `extract` to pull out ranges of packed bytes into an aligned buffer.
+
+The range is specified in the basepair range (e.g. `0..10` for the first 10 bases) which is converted to a byte range internally.
+The bits relevant to the range are extracted and packed into the output buffer so that the output buffer is correctly aligned.
+
+```rust
+use bitnuc::{encode_resize, extract_resize, decode_resize, BitnucError};
+
+fn main() -> Result<(), BitnucError> {
+    let seq = b"ACCAAGGTTACATGAAGTTAACCAAGAGAC";
+
+    // encode the sequence
+    let mut packed = Vec::new();
+    encode_resize(seq, &mut packed);
+
+    // extract some subsequence
+    let range = 4..11; 
+    let mut extracted = Vec::new();
+    extract_resize(&packed, range.clone(), &mut extracted)?;
+
+    // decode the extracted sequence
+    let mut decoded = Vec::new();
+    decode_resize(&extracted, range.len(), &mut decoded)?;
+
+    // validate expected output
+    assert_eq!(decoded, seq[range]);
+
+    Ok(())
+}
+```
 
 ## Memory Usage
 
