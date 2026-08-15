@@ -1,4 +1,6 @@
-use std::ops::Range;
+use std::ops::{BitOr, Range, Shl, Shr};
+
+use fearless_simd::{Level, Simd, SimdBase, dispatch, u8x16, u8x32, u8x64};
 
 use crate::{BitnucError, resize};
 
@@ -27,7 +29,11 @@ pub fn extract(packed: &[u8], range: Range<usize>, into: &mut [u8]) -> Result<()
         return Ok(());
     }
 
-    extract_inner(packed, range, into);
+    let level = Level::new();
+    dispatch!(
+        level,
+        simd =>  extract_inner(simd, packed, range, into)
+    );
 
     Ok(())
 }
@@ -50,28 +56,50 @@ pub fn extract_resize(
         });
     }
     resize::resize(into, range.len().div_ceil(4));
-    extract_inner(packed, range, into);
+
+    let level = Level::new();
+    dispatch!(
+        level,
+        simd =>  extract_inner(simd, packed, range, into)
+    );
     Ok(())
 }
 
 #[inline(always)]
-fn extract_inner(packed: &[u8], range: Range<usize>, into: &mut [u8]) {
+fn extract_inner<S: Simd>(simd: S, packed: &[u8], range: Range<usize>, into: &mut [u8]) {
     let start_word = range.start / 4;
     let end_word = (range.end - 1) / 4;
     let packed_subset = &packed[start_word..=end_word];
 
-    // Phase offset into the packed word
-    let offbit = 2 * (range.start % 4);
+    // Phase offset into the packed word (u32 for SIMD shift operations)
+    let offbit = 2 * (range.start % 4) as u32;
 
-    // fast-path: no need to shift bits
     if offbit == 0 {
         into[..packed_subset.len()].copy_from_slice(packed_subset);
     } else {
-        // main loop: shift bits between packed words
-        for idx in 0..into.len() {
-            let w_i = packed_subset[idx]; // current packed word
-            let w_i1 = packed_subset.get(idx + 1).copied().unwrap_or(0); // next packed word, if any
-            into[idx] = (w_i >> offbit) | (w_i1 << (8 - offbit));
+        let mut idx = 0;
+        while idx + 64 + 1 <= into.len() {
+            extract_lanes::<S, u8x64<S>>(simd, packed_subset, offbit, idx, 64, into);
+            idx += 64;
+        }
+
+        if idx + 32 + 1 <= into.len() {
+            extract_lanes::<S, u8x32<S>>(simd, packed_subset, offbit, idx, 32, into);
+            idx += 32;
+        }
+
+        if idx + 16 + 1 <= into.len() {
+            extract_lanes::<S, u8x16<S>>(simd, packed_subset, offbit, idx, 16, into);
+            idx += 16;
+        }
+
+        // scalar fallback
+        while idx < into.len() {
+            let w_i = packed_subset[idx];
+            let w_i1 = packed_subset.get(idx + 1).copied().unwrap_or(0);
+            let w_o = (w_i >> offbit) | (w_i1 << (8 - offbit));
+            into[idx] = w_o;
+            idx += 1
         }
     }
 
@@ -80,6 +108,31 @@ fn extract_inner(packed: &[u8], range: Range<usize>, into: &mut [u8]) {
         let used_bits = 2 * (range.len() % 4);
         into[into.len() - 1] &= (1u8 << used_bits) - 1; // bitmask out unused bits
     }
+}
+
+/// Generic implementation of the core extraction logic.
+///
+/// `packed` is the packed sequence to extract from.
+/// `offbit` is the number of bits to shift left/right.
+/// `offset` is the offset into `packed` to start extracting from.
+/// `size` is the number of packed bytes to extract.
+/// `into` is the output buffer.
+#[inline(always)]
+fn extract_lanes<S, V>(
+    simd: S,
+    packed: &[u8],
+    offbit: u32,
+    offset: usize,
+    size: usize,
+    into: &mut [u8],
+) where
+    S: Simd,
+    V: SimdBase<S, Element = u8> + Shl<u32, Output = V> + Shr<u32, Output = V> + BitOr<Output = V>,
+{
+    let w_i = V::from_slice(simd, &packed[offset..offset + size]);
+    let w_i1 = V::from_slice(simd, &packed[offset + 1..offset + size + 1]);
+    let w_o = (w_i >> offbit) | (w_i1 << (8 - offbit));
+    into[offset..offset + size].copy_from_slice(w_o.as_slice());
 }
 
 #[cfg(test)]
