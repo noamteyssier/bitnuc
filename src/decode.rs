@@ -2,7 +2,7 @@ use core::ops::{BitAnd, BitOr, Shl};
 
 use fearless_simd::{Level, Simd, dispatch, prelude::*, u8x16, u8x32, u8x64};
 
-use crate::BitnucError;
+use crate::{BitnucError, resize};
 
 /// Decodes a 2-bit encoded buffer back into `n` ASCII nucleotides.
 pub fn decode(ebuf: &[u8], n: usize, seq: &mut [u8]) -> Result<(), BitnucError> {
@@ -37,20 +37,13 @@ pub fn decode(ebuf: &[u8], n: usize, seq: &mut [u8]) -> Result<(), BitnucError> 
 /// are returned to the user.
 #[allow(clippy::uninit_vec)]
 pub fn decode_resize(ebuf: &[u8], n: usize, seq: &mut Vec<u8>) -> Result<(), BitnucError> {
-    if seq.len() < n {
-        let diff = n - seq.len();
-        seq.reserve(diff);
-        unsafe {
-            seq.set_len(n);
-        }
-    }
-
     if ebuf.len() < n.div_ceil(4) {
         return Err(BitnucError::EncodingBufferTooSmall {
             expected: n.div_ceil(4),
             actual: ebuf.len(),
         });
     }
+    resize(seq, n);
 
     let level = Level::new();
     dispatch!(level, simd => decode_inner(simd, ebuf, n, &mut seq[..n]));
