@@ -1,6 +1,6 @@
 use std::hint::black_box;
 
-use bitnuc::{ambiguous_bases, as_2bit, decode, encode, encode_resize, from_2bit};
+use bitnuc::{ambiguous_bases, as_2bit, decode, encode, encode_resize, extract, from_2bit};
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 
 fn generate_sequence(length: usize) -> Vec<u8> {
@@ -134,12 +134,57 @@ fn bench_ambiguous(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_extract(c: &mut Criterion) {
+    let mut group = c.benchmark_group("extract");
+
+    // Test different sequence lengths, at both:
+    // - byte-aligned start (`offbit == 0` memcpy fast path)
+    // - byte-unaligned start (the shift-and-merge path in SIMD)
+    for size in [10, 100, 1_000, 10_000, 100_000].iter() {
+        group.throughput(Throughput::Bytes(*size as u64));
+        let seq = generate_sequence(*size);
+        let mut packed = Vec::new();
+        encode_resize(&seq, &mut packed);
+
+        let aligned_range = 0..*size;
+        let mut aligned_out = vec![0u8; aligned_range.len().div_ceil(4)];
+        group.bench_with_input(
+            BenchmarkId::new("extract_aligned", size),
+            &packed,
+            |b, packed| {
+                b.iter(|| {
+                    extract(packed, aligned_range.clone(), &mut aligned_out).unwrap();
+                    black_box(&aligned_out);
+                })
+            },
+        );
+
+        if *size > 4 {
+            let unaligned_range = 1..(*size - 1);
+            let mut unaligned_out = vec![0u8; unaligned_range.len().div_ceil(4)];
+            group.bench_with_input(
+                BenchmarkId::new("extract_unaligned", size),
+                &packed,
+                |b, packed| {
+                    b.iter(|| {
+                        extract(packed, unaligned_range.clone(), &mut unaligned_out).unwrap();
+                        black_box(&unaligned_out);
+                    })
+                },
+            );
+        }
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_packing,
     bench_encoding,
     bench_unpacking,
     bench_decoding,
-    bench_ambiguous
+    bench_ambiguous,
+    bench_extract,
 );
 criterion_main!(benches);

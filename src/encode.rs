@@ -2,7 +2,7 @@ use core::ops::{BitAnd, BitOr, Shr};
 
 use fearless_simd::{Level, Simd, dispatch, prelude::*, u8x16, u32x4, u32x8, u32x16};
 
-use crate::BitnucError;
+use crate::{BitnucError, resize};
 
 /// Two-bit encodes an input sequence into an encoding buffer
 pub fn encode(seq: &[u8], ebuf: &mut [u8]) -> Result<(), BitnucError> {
@@ -32,12 +32,7 @@ pub fn encode(seq: &[u8], ebuf: &mut [u8]) -> Result<(), BitnucError> {
 #[allow(clippy::uninit_vec)]
 pub fn encode_resize(seq: &[u8], ebuf: &mut Vec<u8>) {
     let n_bytes = seq.len().div_ceil(4);
-    if ebuf.len() < n_bytes {
-        ebuf.reserve(n_bytes - ebuf.len());
-        unsafe {
-            ebuf.set_len(n_bytes); // currently uninit values
-        }
-    }
+    resize(ebuf, n_bytes);
 
     let level = Level::new();
     dispatch!(level, simd => encode_inner(simd, seq, &mut ebuf[..n_bytes]));

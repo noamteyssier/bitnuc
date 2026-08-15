@@ -4,15 +4,19 @@ mod ambiguous;
 mod decode;
 mod encode;
 mod error;
+mod extract;
 mod hamming;
 mod kmer;
+mod resize;
 
 pub use ambiguous::{Pos, ambiguous_bases};
 pub use decode::{decode, decode_resize};
 pub use encode::{encode, encode_resize};
 pub use error::BitnucError;
+pub use extract::{extract, extract_resize};
 pub use hamming::hdist_scalar;
 pub use kmer::{as_2bit, from_2bit};
+pub(crate) use resize::resize;
 
 #[cfg(test)]
 mod testing {
