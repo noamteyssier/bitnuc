@@ -17,12 +17,15 @@ pub fn extract(packed: &[u8], range: Range<usize>, into: &mut [u8]) -> Result<()
     }
 
     // Range span is larger than the available buffer
-    if (range.end - range.start).div_ceil(4) > into.len() {
+    if range.len().div_ceil(4) > into.len() {
         return Err(BitnucError::EncodingBufferTooSmall {
             expected: range.len().div_ceil(4),
             actual: into.len(),
         });
     }
+
+    // set the range of the output buffer to the exact size needed for the range
+    let into = &mut into[..range.len().div_ceil(4)];
 
     // no-op
     if range.is_empty() {
@@ -142,7 +145,7 @@ fn extract_lanes<S, V>(
 mod testing {
     use rand::{Rng, RngExt, rngs::SmallRng};
 
-    use super::extract_resize;
+    use super::{extract, extract_resize};
     use crate::{decode_resize, encode_resize};
 
     fn gen_seq<R: Rng>(n: usize, rng: &mut R) -> Vec<u8> {
@@ -196,6 +199,52 @@ mod testing {
             }
 
             nproc += 1;
+        }
+    }
+
+    #[test]
+    fn test_extract_oversized_buffer() {
+        let mut rng: SmallRng = rand::make_rng();
+
+        const BUF_LEN: usize = 32;
+        let mut buf = [0u8; BUF_LEN];
+
+        for seq_len in [1usize, 2, 3, 5, 8, 9, 17, 65, 128, 130] {
+            let seq = gen_seq(seq_len, &mut rng);
+            let mut packed = Vec::default();
+            encode_resize(&seq, &mut packed);
+
+            for start in 0..=seq_len {
+                for end in start..=seq_len.min(start + BUF_LEN * 4) {
+                    let range = start..end;
+                    let out_len = range.len().div_ceil(4);
+
+                    // poison the buffer so stale bits surface in the tail-masking check
+                    buf.fill(0xFF);
+                    extract(&packed, range.clone(), &mut buf).unwrap();
+
+                    let mut decoded = Vec::default();
+                    decode_resize(&buf[..out_len], range.len(), &mut decoded).unwrap();
+
+                    assert_eq!(
+                        decoded,
+                        seq[range.clone()],
+                        "mismatch at seq_len={seq_len}, range={range:?}"
+                    );
+
+                    // unused high bits of the last written byte must be zero
+                    if range.len() % 4 != 0 {
+                        let used_bits = 2 * (range.len() % 4);
+                        let mask = !((1u8 << used_bits) - 1);
+                        let last = buf[out_len - 1];
+                        assert_eq!(
+                            last & mask,
+                            0,
+                            "unused bits not zero at seq_len={seq_len}, range={range:?}, last byte={last:#010b}"
+                        );
+                    }
+                }
+            }
         }
     }
 
