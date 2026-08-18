@@ -20,4 +20,9 @@ pub enum BitnucError {
 
     #[error("Invalid length: {0}")]
     InvalidLength(usize),
+
+    #[error(
+        "Pairwise distance buffer is too small - expected at least {expected} entries, but got {actual} entries"
+    )]
+    PairwiseDistanceBufferTooSmall { expected: usize, actual: usize },
 }

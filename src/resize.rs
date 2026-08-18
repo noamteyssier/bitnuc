@@ -6,7 +6,7 @@
 /// This should only be called when the buffer will be immediately
 /// rewritten and filled with new data.
 #[allow(clippy::uninit_vec)]
-pub(crate) fn resize(buf: &mut Vec<u8>, size: usize) {
+pub(crate) fn resize<T>(buf: &mut Vec<T>, size: usize) {
     if buf.len() < size {
         buf.reserve(size - buf.len());
         unsafe {
