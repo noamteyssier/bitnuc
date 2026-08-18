@@ -1,6 +1,6 @@
 [package]
 name = "bitnuc"
-version = "0.5.3"
+version = "0.5.4"
 edition = "2024"
 authors = ["Noam Teyssier"]
 repository = "https://github.com/noamteyssier/bitnuc"
