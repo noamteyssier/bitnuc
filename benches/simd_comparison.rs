@@ -1,6 +1,9 @@
 use std::hint::black_box;
 
-use bitnuc::{ambiguous_bases, as_2bit, decode, encode, encode_resize, extract, from_2bit};
+use bitnuc::{
+    ambiguous_bases, as_2bit, decode, encode, encode_resize, extract, from_2bit,
+    hdist_pairwise_resize, hdist_scalar,
+};
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 
 fn generate_sequence(length: usize) -> Vec<u8> {
@@ -178,6 +181,57 @@ fn bench_extract(c: &mut Criterion) {
     group.finish();
 }
 
+/// Deterministic pseudo-random packed kmers (xorshift64)
+fn generate_kmers(n: usize) -> Vec<u64> {
+    let mut state = 0x243F6A8885A308D3u64;
+    (0..n)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        })
+        .collect()
+}
+
+/// Naive scalar baseline for `hdist_pairwise_resize`
+fn hdist_pairwise_scalar(items: &[u64], len: usize, into: &mut [usize]) {
+    let mut out = 0;
+    for (i, &u) in items.iter().enumerate() {
+        for &v in &items[i + 1..] {
+            into[out] = hdist_scalar(u, v, len).unwrap() as usize;
+            out += 1;
+        }
+    }
+}
+
+fn bench_hdist_pairwise(c: &mut Criterion) {
+    let mut group = c.benchmark_group("hdist_pairwise");
+    let len = 32;
+
+    for n in [8, 16, 128, 1024] {
+        let n_distances = n * (n - 1) / 2;
+        group.throughput(Throughput::Elements(n_distances as u64));
+        let items = generate_kmers(n);
+        let mut into = vec![0usize; n_distances];
+
+        group.bench_with_input(BenchmarkId::new("simd", n), &items, |b, items| {
+            b.iter(|| {
+                hdist_pairwise_resize(items, len, &mut into).unwrap();
+                black_box(&into);
+            })
+        });
+        group.bench_with_input(BenchmarkId::new("scalar", n), &items, |b, items| {
+            b.iter(|| {
+                hdist_pairwise_scalar(items, len, &mut into);
+                black_box(&into);
+            })
+        });
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_packing,
@@ -186,5 +240,6 @@ criterion_group!(
     bench_decoding,
     bench_ambiguous,
     bench_extract,
+    bench_hdist_pairwise,
 );
 criterion_main!(benches);
