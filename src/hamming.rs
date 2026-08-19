@@ -8,6 +8,17 @@ use crate::{BitnucError, resize};
 const LOWER_BITS: u64 = 0x5555555555555555;
 const UPPER_BITS: u64 = 0xAAAAAAAAAAAAAAAA;
 
+/// Calculates the hamming distance between two 2-bit packed sequences
+/// (as produced by [`encode`](super::encode)) of length `len` bases.
+///
+/// Only the first `len` bases are compared, so buffers may be oversized
+/// (e.g. reused across [`encode_resize`](super::encode_resize) calls)
+/// and have unequal lengths.
+///
+/// # Errors
+///
+/// Returns [`BitnucError::EncodingBufferTooSmall`] if either buffer
+/// holds fewer than `len.div_ceil(4)` bytes.
 pub fn hdist(u: &[u8], v: &[u8], len: usize) -> Result<usize, BitnucError> {
     if len.div_ceil(4) > u.len() {
         return Err(BitnucError::EncodingBufferTooSmall {
@@ -19,12 +30,6 @@ pub fn hdist(u: &[u8], v: &[u8], len: usize) -> Result<usize, BitnucError> {
         return Err(BitnucError::EncodingBufferTooSmall {
             expected: len.div_ceil(4),
             actual: v.len(),
-        });
-    }
-    if u.len() != v.len() {
-        return Err(BitnucError::EncodingBuffersAreDifferentLengths {
-            u_len: u.len(),
-            v_len: v.len(),
         });
     }
 
@@ -257,6 +262,28 @@ mod hdist_packed {
     use crate::encode_resize;
 
     use super::*;
+
+    #[test]
+    fn test_hdist_packed_validation() {
+        // Buffers must hold at least len.div_ceil(4) bytes
+        assert!(hdist(&[0; 2], &[0; 3], 12).is_err());
+        assert!(hdist(&[0; 3], &[0; 2], 12).is_err());
+        assert!(hdist(&[0; 3], &[0; 3], 12).is_ok());
+    }
+
+    #[test]
+    fn test_hdist_packed_oversized_buffers() {
+        // Oversized buffers of unequal lengths are fine - only the first
+        // `len` bases are compared. This matters for buffers reused across
+        // `encode_resize` calls, which grow but never shrink.
+        let mut u = Vec::new();
+        let mut v = Vec::new();
+        encode_resize(b"ACGTACGTAC", &mut u); // 10 bases -> 3 bytes
+        encode_resize(b"ACGTACGAACGTACGTACGT", &mut v); // 20 bases -> 5 bytes
+
+        // Over the first 10 bases the sequences differ only at base 7
+        assert_eq!(hdist(&u, &v, 10).unwrap(), 1);
+    }
 
     fn generate_sequence<R: Rng>(n: usize, rng: &mut R) -> Vec<u8> {
         (0..n).map(|_| *b"ACGT".choose(rng).unwrap()).collect()
