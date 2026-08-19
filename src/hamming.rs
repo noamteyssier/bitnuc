@@ -1,12 +1,124 @@
 use std::ops::{BitAnd, BitOr, BitXor, Shr};
 
-use fearless_simd::{Level, Simd, SimdBase, dispatch, u64x2, u64x4, u64x8};
+use fearless_simd::{Level, Simd, SimdBase, dispatch, u8x16, u8x32, u8x64, u64x2, u64x4, u64x8};
 
 use crate::{BitnucError, resize};
 
 // Masks for the lower and upper bit of each 2-bit group
 const LOWER_BITS: u64 = 0x5555555555555555;
 const UPPER_BITS: u64 = 0xAAAAAAAAAAAAAAAA;
+
+pub fn hdist(u: &[u8], v: &[u8], len: usize) -> Result<usize, BitnucError> {
+    if len.div_ceil(4) > u.len() {
+        return Err(BitnucError::EncodingBufferTooSmall {
+            expected: len.div_ceil(4),
+            actual: u.len(),
+        });
+    }
+    if len.div_ceil(4) > v.len() {
+        return Err(BitnucError::EncodingBufferTooSmall {
+            expected: len.div_ceil(4),
+            actual: v.len(),
+        });
+    }
+    if u.len() != v.len() {
+        return Err(BitnucError::EncodingBuffersAreDifferentLengths {
+            u_len: u.len(),
+            v_len: v.len(),
+        });
+    }
+
+    let level = Level::new();
+    let dist = dispatch!(level, simd => hdist_simd(simd, u, v, len));
+
+    Ok(dist)
+}
+
+fn hdist_simd<S: Simd>(simd: S, u: &[u8], v: &[u8], len: usize) -> usize {
+    // number of bytes which are *fully* valid (i.e. contain 4 bases each)
+    let packed_bytes = len / 4;
+
+    let mut dist = 0;
+    let mut i = 0;
+    while i + 64 <= packed_bytes {
+        hdist_lanes::<S, u8x64<S>>(
+            simd,
+            u8x64::from_slice(simd, &u[i..i + 64]),
+            u8x64::from_slice(simd, &v[i..i + 64]),
+            &mut dist,
+        );
+        i += 64;
+    }
+
+    while i + 32 <= packed_bytes {
+        hdist_lanes::<S, u8x32<S>>(
+            simd,
+            u8x32::from_slice(simd, &u[i..i + 32]),
+            u8x32::from_slice(simd, &v[i..i + 32]),
+            &mut dist,
+        );
+        i += 32;
+    }
+
+    while i + 16 <= packed_bytes {
+        hdist_lanes::<S, u8x16<S>>(
+            simd,
+            u8x16::from_slice(simd, &u[i..i + 16]),
+            u8x16::from_slice(simd, &v[i..i + 16]),
+            &mut dist,
+        );
+        i += 16;
+    }
+
+    while i < packed_bytes {
+        let diff = u[i] ^ v[i];
+        let lo = diff & 0x55;
+        let hi = (diff & 0xAA) >> 1;
+        let combined = lo | hi;
+
+        dist += combined.count_ones() as usize;
+
+        i += 1;
+    }
+
+    if i != u.len() && len % 4 != 0 {
+        // Handle the last byte if it contains fewer than 4 bases
+        let remaining_bases = len % 4;
+        let mask = (1u8 << (remaining_bases * 2)) - 1;
+        let diff = (u[i] ^ v[i]) & mask;
+
+        let lo = diff & 0x55;
+        let hi = (diff & 0xAA) >> 1;
+        let combined = lo | hi;
+
+        dist += combined.count_ones() as usize;
+    }
+
+    dist
+}
+
+fn hdist_lanes<S, V>(simd: S, u: V, v: V, d: &mut usize)
+where
+    S: Simd,
+    V: SimdBase<S, Element = u8>
+        + BitXor<Output = V>
+        + BitAnd<Output = V>
+        + Shr<u32, Output = V>
+        + BitOr<Output = V>,
+{
+    let diff = v ^ u;
+
+    // A base differs if either of its two bits differs
+    let lower_diffs = diff & V::simd_from(simd, 0x55);
+    let upper_diffs = (diff & V::simd_from(simd, 0xAA)) >> 1;
+    let combined_diffs = lower_diffs | upper_diffs;
+
+    // unfortunately need to run popcount on each lane separately
+    // since fearless_simd doesn't have a popcount/lane implementation.
+    for c in combined_diffs.as_slice() {
+        *d += c.count_ones() as usize;
+    }
+}
 
 /// Calculates the hamming distance between two 2-bit packed `u64` kmers
 /// (as produced by [`as_2bit`](super::as_2bit)) of length `len` bases.
@@ -174,6 +286,82 @@ where
     // since fearless_simd doesn't have a popcount/lane implementation.
     for (idx, c) in combined_diffs.as_slice().iter().enumerate() {
         out[idx] = c.count_ones() as usize;
+    }
+}
+
+#[cfg(test)]
+mod hdist_packed {
+    use std::collections::HashSet;
+
+    use rand::{Rng, RngExt, make_rng, rngs::SmallRng, seq::IndexedRandom};
+
+    use crate::encode_resize;
+
+    use super::*;
+
+    fn generate_sequence<R: Rng>(n: usize, rng: &mut R) -> Vec<u8> {
+        (0..n).map(|_| *b"ACGT".choose(rng).unwrap()).collect()
+    }
+
+    fn edit_sequence<R: Rng>(seq: &mut [u8], n_errors: usize, rng: &mut R) {
+        let len = seq.len();
+        if len == 0 {
+            return;
+        }
+
+        let mut seen_pos = HashSet::new();
+        for _ in 0..(n_errors.min(len)) {
+            let idx = {
+                loop {
+                    let idx = rng.random_range(0..len);
+                    if !seen_pos.contains(&idx) {
+                        seen_pos.insert(idx);
+                        break idx;
+                    }
+                }
+            };
+
+            let new_base = {
+                let cur_base = seq[idx];
+                loop {
+                    let new_base = *b"ACGT".choose(rng).unwrap();
+                    if new_base != cur_base {
+                        break new_base;
+                    }
+                }
+            };
+
+            seq[idx] = new_base;
+        }
+    }
+
+    #[test]
+    fn test_hdist_packed() {
+        let mut rng: SmallRng = make_rng();
+
+        let mut ebuf1 = Vec::new();
+        let mut ebuf2 = Vec::new();
+        for size in [1, 10, 100, 1_000, 10_000] {
+            let seq1 = generate_sequence(size, &mut rng);
+
+            for n_errors in [1, 2, 5, 10, 100] {
+                if n_errors > size {
+                    continue;
+                }
+
+                let mut seq2 = seq1.clone();
+                edit_sequence(&mut seq2, n_errors, &mut rng);
+
+                encode_resize(&seq1, &mut ebuf1);
+                encode_resize(&seq2, &mut ebuf2);
+
+                let dist = hdist(&ebuf1, &ebuf2, size).unwrap();
+                assert_eq!(
+                    dist, n_errors,
+                    "Failed for size {size} with {n_errors} errors"
+                );
+            }
+        }
     }
 }
 

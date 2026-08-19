@@ -25,4 +25,7 @@ pub enum BitnucError {
         "Pairwise distance buffer is too small - expected at least {expected} entries, but got {actual} entries"
     )]
     PairwiseDistanceBufferTooSmall { expected: usize, actual: usize },
+
+    #[error("Encoding buffers are different lengths - u_len: {u_len}, v_len: {v_len}")]
+    EncodingBuffersAreDifferentLengths { u_len: usize, v_len: usize },
 }

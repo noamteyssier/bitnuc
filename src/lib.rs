@@ -14,7 +14,7 @@ pub use decode::{decode, decode_resize};
 pub use encode::{encode, encode_resize};
 pub use error::BitnucError;
 pub use extract::{extract, extract_resize};
-pub use hamming::{hdist_pairwise, hdist_pairwise_resize, hdist_scalar};
+pub use hamming::{hdist, hdist_pairwise, hdist_pairwise_resize, hdist_scalar};
 pub use kmer::{as_2bit, from_2bit};
 pub(crate) use resize::resize;
 
