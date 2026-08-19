@@ -1,6 +1,6 @@
 use std::ops::{BitAnd, BitOr, BitXor, Shr};
 
-use fearless_simd::{Level, Simd, SimdBase, dispatch, u8x16, u8x32, u8x64, u64x2, u64x4, u64x8};
+use fearless_simd::{Level, Simd, SimdBase, dispatch, u64x2, u64x4, u64x8};
 
 use crate::{BitnucError, resize};
 
@@ -28,96 +28,55 @@ pub fn hdist(u: &[u8], v: &[u8], len: usize) -> Result<usize, BitnucError> {
         });
     }
 
-    let level = Level::new();
-    let dist = dispatch!(level, simd => hdist_simd(simd, u, v, len));
+    let packed_bytes = len / 4;
+    let mut dist = hdist_bytes_words(&u[..packed_bytes], &v[..packed_bytes]);
+
+    // handle partial byte at the end, if any (len % 4 != 0)
+    if !len.is_multiple_of(4) {
+        // calculate the exclusion mask for the valid bits in the last packed byte
+        let mask = (1u8 << ((len % 4) * 2)) - 1;
+        let diff = (u[packed_bytes] ^ v[packed_bytes]) & mask;
+        let combined = (diff & 0x55) | ((diff & 0xAA) >> 1);
+
+        dist += combined.count_ones() as usize;
+    }
 
     Ok(dist)
 }
 
-fn hdist_simd<S: Simd>(simd: S, u: &[u8], v: &[u8], len: usize) -> usize {
-    // number of bytes which are *fully* valid (i.e. contain 4 bases each)
-    let packed_bytes = len / 4;
-
+/// Hamming distance over fully-packed bytes, one `u64` word (32 bases) per
+/// popcount. LLVM auto-vectorizes this loop well; a raw NEON `vcnt` kernel
+/// with blocked accumulation was benchmarked at only ~6-13% faster, not
+/// worth the arch-specific unsafe code.
+fn hdist_bytes_words(u: &[u8], v: &[u8]) -> usize {
     let mut dist = 0;
-    let mut i = 0;
-    while i + 64 <= packed_bytes {
-        hdist_lanes::<S, u8x64<S>>(
-            simd,
-            u8x64::from_slice(simd, &u[i..i + 64]),
-            u8x64::from_slice(simd, &v[i..i + 64]),
-            &mut dist,
-        );
-        i += 64;
-    }
 
-    while i + 32 <= packed_bytes {
-        hdist_lanes::<S, u8x32<S>>(
-            simd,
-            u8x32::from_slice(simd, &u[i..i + 32]),
-            u8x32::from_slice(simd, &v[i..i + 32]),
-            &mut dist,
-        );
-        i += 32;
-    }
+    // process in 8-byte chunks (64 bits, 32 bases) for better throughput
+    let mut chunks_u = u.chunks_exact(8);
+    let mut chunks_v = v.chunks_exact(8);
+    for (a, b) in (&mut chunks_u).zip(&mut chunks_v) {
+        let a = u64::from_le_bytes(a.try_into().unwrap());
+        let b = u64::from_le_bytes(b.try_into().unwrap());
 
-    while i + 16 <= packed_bytes {
-        hdist_lanes::<S, u8x16<S>>(
-            simd,
-            u8x16::from_slice(simd, &u[i..i + 16]),
-            u8x16::from_slice(simd, &v[i..i + 16]),
-            &mut dist,
-        );
-        i += 16;
-    }
-
-    while i < packed_bytes {
-        let diff = u[i] ^ v[i];
-        let lo = diff & 0x55;
-        let hi = (diff & 0xAA) >> 1;
+        let diff = a ^ b;
+        let lo = diff & LOWER_BITS;
+        let hi = (diff & UPPER_BITS) >> 1;
         let combined = lo | hi;
 
         dist += combined.count_ones() as usize;
-
-        i += 1;
     }
 
-    if i != u.len() && len % 4 != 0 {
-        // Handle the last byte if it contains fewer than 4 bases
-        let remaining_bases = len % 4;
-        let mask = (1u8 << (remaining_bases * 2)) - 1;
-        let diff = (u[i] ^ v[i]) & mask;
-
-        let lo = diff & 0x55;
-        let hi = (diff & 0xAA) >> 1;
-        let combined = lo | hi;
+    // handle scalar tail excluding the last partial byte
+    //
+    // which should not be passed to this function anyways
+    for (a, b) in chunks_u.remainder().iter().zip(chunks_v.remainder()) {
+        let diff = a ^ b;
+        let combined = (diff & 0x55) | ((diff & 0xAA) >> 1);
 
         dist += combined.count_ones() as usize;
     }
 
     dist
-}
-
-fn hdist_lanes<S, V>(simd: S, u: V, v: V, d: &mut usize)
-where
-    S: Simd,
-    V: SimdBase<S, Element = u8>
-        + BitXor<Output = V>
-        + BitAnd<Output = V>
-        + Shr<u32, Output = V>
-        + BitOr<Output = V>,
-{
-    let diff = v ^ u;
-
-    // A base differs if either of its two bits differs
-    let lower_diffs = diff & V::simd_from(simd, 0x55);
-    let upper_diffs = (diff & V::simd_from(simd, 0xAA)) >> 1;
-    let combined_diffs = lower_diffs | upper_diffs;
-
-    // unfortunately need to run popcount on each lane separately
-    // since fearless_simd doesn't have a popcount/lane implementation.
-    for c in combined_diffs.as_slice() {
-        *d += c.count_ones() as usize;
-    }
 }
 
 /// Calculates the hamming distance between two 2-bit packed `u64` kmers
