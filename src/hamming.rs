@@ -8,6 +8,82 @@ use crate::{BitnucError, resize};
 const LOWER_BITS: u64 = 0x5555555555555555;
 const UPPER_BITS: u64 = 0xAAAAAAAAAAAAAAAA;
 
+/// Calculates the hamming distance between two 2-bit packed sequences
+/// (as produced by [`encode`](super::encode)) of length `len` bases.
+///
+/// Only the first `len` bases are compared, so buffers may be oversized
+/// (e.g. reused across [`encode_resize`](super::encode_resize) calls)
+/// and have unequal lengths.
+///
+/// # Errors
+///
+/// Returns [`BitnucError::EncodingBufferTooSmall`] if either buffer
+/// holds fewer than `len.div_ceil(4)` bytes.
+pub fn hdist(u: &[u8], v: &[u8], len: usize) -> Result<usize, BitnucError> {
+    if len.div_ceil(4) > u.len() {
+        return Err(BitnucError::EncodingBufferTooSmall {
+            expected: len.div_ceil(4),
+            actual: u.len(),
+        });
+    }
+    if len.div_ceil(4) > v.len() {
+        return Err(BitnucError::EncodingBufferTooSmall {
+            expected: len.div_ceil(4),
+            actual: v.len(),
+        });
+    }
+
+    let packed_bytes = len / 4;
+    let mut dist = hdist_bytes_words(&u[..packed_bytes], &v[..packed_bytes]);
+
+    // handle partial byte at the end, if any (len % 4 != 0)
+    if !len.is_multiple_of(4) {
+        // calculate the exclusion mask for the valid bits in the last packed byte
+        let mask = (1u8 << ((len % 4) * 2)) - 1;
+        let diff = (u[packed_bytes] ^ v[packed_bytes]) & mask;
+        let combined = (diff & 0x55) | ((diff & 0xAA) >> 1);
+
+        dist += combined.count_ones() as usize;
+    }
+
+    Ok(dist)
+}
+
+/// Hamming distance over fully-packed bytes, one `u64` word (32 bases) per
+/// popcount. LLVM auto-vectorizes this loop well; a raw NEON `vcnt` kernel
+/// with blocked accumulation was benchmarked at only ~6-13% faster, not
+/// worth the arch-specific unsafe code.
+fn hdist_bytes_words(u: &[u8], v: &[u8]) -> usize {
+    let mut dist = 0;
+
+    // process in 8-byte chunks (64 bits, 32 bases) for better throughput
+    let mut chunks_u = u.chunks_exact(8);
+    let mut chunks_v = v.chunks_exact(8);
+    for (a, b) in (&mut chunks_u).zip(&mut chunks_v) {
+        let a = u64::from_le_bytes(a.try_into().unwrap());
+        let b = u64::from_le_bytes(b.try_into().unwrap());
+
+        let diff = a ^ b;
+        let lo = diff & LOWER_BITS;
+        let hi = (diff & UPPER_BITS) >> 1;
+        let combined = lo | hi;
+
+        dist += combined.count_ones() as usize;
+    }
+
+    // handle scalar tail excluding the last partial byte
+    //
+    // which should not be passed to this function anyways
+    for (a, b) in chunks_u.remainder().iter().zip(chunks_v.remainder()) {
+        let diff = a ^ b;
+        let combined = (diff & 0x55) | ((diff & 0xAA) >> 1);
+
+        dist += combined.count_ones() as usize;
+    }
+
+    dist
+}
+
 /// Calculates the hamming distance between two 2-bit packed `u64` kmers
 /// (as produced by [`as_2bit`](super::as_2bit)) of length `len` bases.
 ///
@@ -174,6 +250,104 @@ where
     // since fearless_simd doesn't have a popcount/lane implementation.
     for (idx, c) in combined_diffs.as_slice().iter().enumerate() {
         out[idx] = c.count_ones() as usize;
+    }
+}
+
+#[cfg(test)]
+mod hdist_packed {
+    use std::collections::HashSet;
+
+    use rand::{Rng, RngExt, make_rng, rngs::SmallRng, seq::IndexedRandom};
+
+    use crate::encode_resize;
+
+    use super::*;
+
+    #[test]
+    fn test_hdist_packed_validation() {
+        // Buffers must hold at least len.div_ceil(4) bytes
+        assert!(hdist(&[0; 2], &[0; 3], 12).is_err());
+        assert!(hdist(&[0; 3], &[0; 2], 12).is_err());
+        assert!(hdist(&[0; 3], &[0; 3], 12).is_ok());
+    }
+
+    #[test]
+    fn test_hdist_packed_oversized_buffers() {
+        // Oversized buffers of unequal lengths are fine - only the first
+        // `len` bases are compared. This matters for buffers reused across
+        // `encode_resize` calls, which grow but never shrink.
+        let mut u = Vec::new();
+        let mut v = Vec::new();
+        encode_resize(b"ACGTACGTAC", &mut u); // 10 bases -> 3 bytes
+        encode_resize(b"ACGTACGAACGTACGTACGT", &mut v); // 20 bases -> 5 bytes
+
+        // Over the first 10 bases the sequences differ only at base 7
+        assert_eq!(hdist(&u, &v, 10).unwrap(), 1);
+    }
+
+    fn generate_sequence<R: Rng>(n: usize, rng: &mut R) -> Vec<u8> {
+        (0..n).map(|_| *b"ACGT".choose(rng).unwrap()).collect()
+    }
+
+    fn edit_sequence<R: Rng>(seq: &mut [u8], n_errors: usize, rng: &mut R) {
+        let len = seq.len();
+        if len == 0 {
+            return;
+        }
+
+        let mut seen_pos = HashSet::new();
+        for _ in 0..(n_errors.min(len)) {
+            let idx = {
+                loop {
+                    let idx = rng.random_range(0..len);
+                    if !seen_pos.contains(&idx) {
+                        seen_pos.insert(idx);
+                        break idx;
+                    }
+                }
+            };
+
+            let new_base = {
+                let cur_base = seq[idx];
+                loop {
+                    let new_base = *b"ACGT".choose(rng).unwrap();
+                    if new_base != cur_base {
+                        break new_base;
+                    }
+                }
+            };
+
+            seq[idx] = new_base;
+        }
+    }
+
+    #[test]
+    fn test_hdist_packed() {
+        let mut rng: SmallRng = make_rng();
+
+        let mut ebuf1 = Vec::new();
+        let mut ebuf2 = Vec::new();
+        for size in [1, 10, 100, 1_000, 10_000] {
+            let seq1 = generate_sequence(size, &mut rng);
+
+            for n_errors in [1, 2, 5, 10, 100] {
+                if n_errors > size {
+                    continue;
+                }
+
+                let mut seq2 = seq1.clone();
+                edit_sequence(&mut seq2, n_errors, &mut rng);
+
+                encode_resize(&seq1, &mut ebuf1);
+                encode_resize(&seq2, &mut ebuf2);
+
+                let dist = hdist(&ebuf1, &ebuf2, size).unwrap();
+                assert_eq!(
+                    dist, n_errors,
+                    "Failed for size {size} with {n_errors} errors"
+                );
+            }
+        }
     }
 }
 

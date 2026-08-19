@@ -122,6 +122,26 @@ fn main() -> Result<(), bitnuc::BitnucError> {
 }
 ```
 
+Longer packed sequences (from `encode`) can be compared with `hdist` and are not limited to 32bp.
+Only the first `len` bases are compared so they can be oversized/reused buffers:
+
+```rust
+use bitnuc::{encode_resize, hdist};
+
+fn main() -> Result<(), bitnuc::BitnucError> {
+    let seq1 = b"ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT"; // 40 bases
+    let seq2 = b"ACGTACGTACGTACGTAAGTACGTACGTACGTACGTACGA";
+
+    let mut packed1 = Vec::new();
+    let mut packed2 = Vec::new();
+    encode_resize(seq1, &mut packed1);
+    encode_resize(seq2, &mut packed2);
+
+    assert_eq!(hdist(&packed1, &packed2, seq1.len())?, 2);
+    Ok(())
+}
+```
+
 ## Identifying ambiguous bases
 
 Ambiguous bases (non-`ACGT`) bases are unable to be represented with this two-bit encoding scheme.
@@ -151,7 +171,7 @@ fn main() {
 
 ## Extraction
 
-It is oftentimes useful to extract subsequences from packed sequences, e.g. for hashing or extracting ranges. 
+It is oftentimes useful to extract subsequences from packed sequences, e.g. for hashing or extracting ranges.
 Use `extract` to pull out ranges of packed bytes into an aligned buffer.
 
 The range is specified in the basepair range (e.g. `0..10` for the first 10 bases) which is converted to a byte range internally.
@@ -168,7 +188,7 @@ fn main() -> Result<(), BitnucError> {
     encode_resize(seq, &mut packed);
 
     // extract some subsequence
-    let range = 4..11; 
+    let range = 4..11;
     let mut extracted = Vec::new();
     extract_resize(&packed, range.clone(), &mut extracted)?;
 

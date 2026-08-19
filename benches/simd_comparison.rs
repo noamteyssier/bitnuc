@@ -1,7 +1,7 @@
 use std::hint::black_box;
 
 use bitnuc::{
-    ambiguous_bases, as_2bit, decode, encode, encode_resize, extract, from_2bit,
+    ambiguous_bases, as_2bit, decode, encode, encode_resize, extract, from_2bit, hdist,
     hdist_pairwise_resize, hdist_scalar,
 };
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
@@ -232,6 +232,63 @@ fn bench_hdist_pairwise(c: &mut Criterion) {
     group.finish();
 }
 
+/// Naive per-byte scalar baseline for `hdist`
+fn hdist_scalar_bytes(u: &[u8], v: &[u8], len: usize) -> usize {
+    let packed_bytes = len / 4;
+    let mut dist = 0;
+
+    for (a, b) in u[..packed_bytes].iter().zip(&v[..packed_bytes]) {
+        let diff = a ^ b;
+        let combined = (diff & 0x55) | ((diff & 0xAA) >> 1);
+        dist += combined.count_ones() as usize;
+    }
+
+    if !len.is_multiple_of(4) {
+        let mask = (1u8 << ((len % 4) * 2)) - 1;
+        let diff = (u[packed_bytes] ^ v[packed_bytes]) & mask;
+        let combined = (diff & 0x55) | ((diff & 0xAA) >> 1);
+        dist += combined.count_ones() as usize;
+    }
+
+    dist
+}
+
+fn bench_hdist_packed(c: &mut Criterion) {
+    let mut group = c.benchmark_group("hdist_packed");
+
+    for len in [100, 1_000, 10_000, 100_000, 1_000_000] {
+        group.throughput(Throughput::Bytes(len as u64));
+
+        let seq1 = generate_sequence(len);
+        // Mutate every 100th base so the distance is non-trivial
+        let mut seq2 = seq1.clone();
+        for i in (0..len).step_by(100) {
+            seq2[i] = if seq2[i] == b'A' { b'C' } else { b'A' };
+        }
+
+        let mut packed1 = Vec::new();
+        let mut packed2 = Vec::new();
+        encode_resize(&seq1, &mut packed1);
+        encode_resize(&seq2, &mut packed2);
+
+        // Both implementations must agree before we time them
+        let expected = hdist(&packed1, &packed2, len).unwrap();
+        assert_eq!(expected, hdist_scalar_bytes(&packed1, &packed2, len));
+
+        let input = (packed1, packed2);
+        group.bench_with_input(BenchmarkId::new("hdist", len), &input, |b, (u, v)| {
+            b.iter(|| hdist(u, v, len).unwrap())
+        });
+        group.bench_with_input(
+            BenchmarkId::new("scalar_bytes", len),
+            &input,
+            |b, (u, v)| b.iter(|| hdist_scalar_bytes(u, v, len)),
+        );
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_packing,
@@ -241,5 +298,6 @@ criterion_group!(
     bench_ambiguous,
     bench_extract,
     bench_hdist_pairwise,
+    bench_hdist_packed,
 );
 criterion_main!(benches);
