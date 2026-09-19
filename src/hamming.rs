@@ -1,6 +1,6 @@
 use std::ops::{BitAnd, BitOr, BitXor, Shr};
 
-use fearless_simd::{Level, Simd, SimdBase, dispatch, u64x2, u64x4, u64x8};
+use fearless_simd::{Level, Simd, SimdInt, dispatch, u64x2, u64x4, u64x8};
 
 use crate::{BitnucError, resize};
 
@@ -57,11 +57,11 @@ fn hdist_bytes_words(u: &[u8], v: &[u8]) -> usize {
     let mut dist = 0;
 
     // process in 8-byte chunks (64 bits, 32 bases) for better throughput
-    let mut chunks_u = u.chunks_exact(8);
-    let mut chunks_v = v.chunks_exact(8);
-    for (a, b) in (&mut chunks_u).zip(&mut chunks_v) {
-        let a = u64::from_le_bytes(a.try_into().unwrap());
-        let b = u64::from_le_bytes(b.try_into().unwrap());
+    let chunks_u = u.as_chunks::<8>();
+    let chunks_v = v.as_chunks::<8>();
+    for (a, b) in (&mut chunks_u.0.iter()).zip(&mut chunks_v.0.iter()) {
+        let a = u64::from_le_bytes(*a);
+        let b = u64::from_le_bytes(*b);
 
         let diff = a ^ b;
         let lo = diff & LOWER_BITS;
@@ -74,7 +74,7 @@ fn hdist_bytes_words(u: &[u8], v: &[u8]) -> usize {
     // handle scalar tail excluding the last partial byte
     //
     // which should not be passed to this function anyways
-    for (a, b) in chunks_u.remainder().iter().zip(chunks_v.remainder()) {
+    for (a, b) in chunks_u.1.iter().zip(chunks_v.1.iter()) {
         let diff = a ^ b;
         let combined = (diff & 0x55) | ((diff & 0xAA) >> 1);
 
@@ -232,7 +232,7 @@ fn hdist_pairwise_simd<S: Simd>(simd: S, items: &[u64], len: usize, into: &mut [
 fn hamming_lanes<S, V>(simd: S, u: u64, v: &[u64], mask: u64, out: &mut [usize])
 where
     S: Simd,
-    V: SimdBase<S, Element = u64>
+    V: SimdInt<S, Element = u64>
         + BitXor<Output = V>
         + BitAnd<Output = V>
         + Shr<u32, Output = V>
@@ -246,10 +246,8 @@ where
     let upper_diffs = (diff & V::simd_from(simd, UPPER_BITS)) >> 1;
     let combined_diffs = lower_diffs | upper_diffs;
 
-    // unfortunately need to run popcount on each lane separately
-    // since fearless_simd doesn't have a popcount/lane implementation.
-    for (idx, c) in combined_diffs.as_slice().iter().enumerate() {
-        out[idx] = c.count_ones() as usize;
+    for (idx, c) in combined_diffs.count_ones().as_slice().iter().enumerate() {
+        out[idx] = *c as usize;
     }
 }
 

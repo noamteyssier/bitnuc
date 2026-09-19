@@ -1,6 +1,6 @@
 [package]
 name = "bitnuc"
-version = "0.5.5"
+version = "0.5.6"
 edition = "2024"
 authors = ["Noam Teyssier"]
 repository = "https://github.com/noamteyssier/bitnuc"
@@ -11,7 +11,7 @@ keywords = ["bioinformatics", "dna", "sequence", "nucleotide", "2bit"]
 categories = ["science::bioinformatics", "encoding", "data-structures"]
 
 [dependencies]
-fearless_simd = "0.7.0"
+fearless_simd = "1.0.0-rc.1"
 thiserror = "2.0.20"
 
 [profile.release]
@@ -19,7 +19,7 @@ lto = true
 codegen-units = 1
 
 [dev-dependencies]
-criterion = "0.5.1"
+criterion = "0.8.2"
 rand = { version = "0.10.2", default-features = false, features = ["sys_rng"] }
 
 [[bench]]
