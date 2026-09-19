@@ -1,6 +1,6 @@
 use std::ops::{BitAnd, BitOr, BitXor, Shr};
 
-use fearless_simd::{Level, Simd, SimdBase, dispatch, u64x2, u64x4, u64x8};
+use fearless_simd::{Level, Simd, SimdInt, dispatch, u64x2, u64x4, u64x8};
 
 use crate::{BitnucError, resize};
 
@@ -232,7 +232,7 @@ fn hdist_pairwise_simd<S: Simd>(simd: S, items: &[u64], len: usize, into: &mut [
 fn hamming_lanes<S, V>(simd: S, u: u64, v: &[u64], mask: u64, out: &mut [usize])
 where
     S: Simd,
-    V: SimdBase<S, Element = u64>
+    V: SimdInt<S, Element = u64>
         + BitXor<Output = V>
         + BitAnd<Output = V>
         + Shr<u32, Output = V>
@@ -246,10 +246,8 @@ where
     let upper_diffs = (diff & V::simd_from(simd, UPPER_BITS)) >> 1;
     let combined_diffs = lower_diffs | upper_diffs;
 
-    // unfortunately need to run popcount on each lane separately
-    // since fearless_simd doesn't have a popcount/lane implementation.
-    for (idx, c) in combined_diffs.as_slice().iter().enumerate() {
-        out[idx] = c.count_ones() as usize;
+    for (idx, c) in combined_diffs.count_ones().as_slice().iter().enumerate() {
+        out[idx] = *c as usize;
     }
 }
 

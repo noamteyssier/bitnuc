@@ -140,8 +140,8 @@ where
     let (q2, q3) = hi.widen();
 
     for (idx, q) in [q0, q1, q2, q3].into_iter().enumerate() {
-        let start = idx * P::N;
-        let end = start + P::N;
+        let start = idx * P::LEN;
+        let end = start + P::LEN;
         spread_lanes(simd, q, table).store_slice(&mut out[start..end]);
     }
 }

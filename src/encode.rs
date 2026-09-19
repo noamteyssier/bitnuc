@@ -139,7 +139,7 @@ where
         quads
     };
 
-    out.copy_from_slice(&bytes.as_slice()[..V::N]);
+    out.copy_from_slice(&bytes.as_slice()[..V::LEN]);
 }
 
 /// Packs 8 ASCII bases into 2 packed bytes using the same bitwise operations
