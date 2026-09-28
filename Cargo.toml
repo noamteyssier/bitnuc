@@ -1,6 +1,6 @@
 [package]
 name = "bitnuc"
-version = "0.5.6"
+version = "0.5.7"
 edition = "2024"
 authors = ["Noam Teyssier"]
 repository = "https://github.com/noamteyssier/bitnuc"
@@ -11,7 +11,7 @@ keywords = ["bioinformatics", "dna", "sequence", "nucleotide", "2bit"]
 categories = ["science::bioinformatics", "encoding", "data-structures"]
 
 [dependencies]
-fearless_simd = "1.0.0-rc.1"
+fearless_simd = "1.0.0"
 thiserror = "2.0.20"
 
 [profile.release]

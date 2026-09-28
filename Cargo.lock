@@ -40,7 +40,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "bitnuc"
-version = "0.5.6"
+version = "0.5.7"
 dependencies = [
  "criterion",
  "fearless_simd",
@@ -202,9 +202,9 @@ checksum = "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
 
 [[package]]
 name = "fearless_simd"
-version = "1.0.0-rc.1"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50a2d1ad65a201b433ff546990c72c804305bb2162f8c09707dd7f9125210b55"
+checksum = "f3772b63c40606beea8fe1f7b06a60de27ceb9bfc2d9dad3427368ca41dc7e62"
 
 [[package]]
 name = "find-msvc-tools"
